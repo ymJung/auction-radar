@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AuctionRadar | 매력 경매매물 추려내기 & 낙찰가 추적/추천 서버</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+    .badge-glow { box-shadow: 0 0 15px rgba(16, 185, 129, 0.25); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <!-- 상단 네비게이션 -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2.5">
+          <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-lg">⚖️</span>
+          <h1 class="text-xl md:text-2xl font-extrabold tracking-tight text-white">
+            AuctionRadar <span class="text-emerald-400 font-semibold text-base ml-1">매력 경매물건 필터링 & 입찰가 추천 엔진</span>
+          </h1>
+        </div>
+        <p class="text-xs md:text-sm text-slate-400 mt-1">
+          핵심 조건: <strong class="text-emerald-300">임차인 없음 · 소유자 거주 중 · 권리상 하자 없음 · 미납관리비 검증</strong> + <strong class="text-sky-300">6대 부동산 데이터 교차분석 & 낙찰가 추적</strong>
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2.5">
+        <button onclick="runScrapePipeline()" id="btn-scrape"
+          class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm font-medium text-slate-200 transition flex items-center gap-1.5">
+          <span>🔄</span> <span>6대 사이트 스크래핑 & 재분석</span>
+        </button>
+        <button onclick="sendTelegramReport()" id="btn-telegram"
+          class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-sm font-semibold text-white shadow-lg shadow-sky-600/25 transition flex items-center gap-1.5">
+          <span>✈️</span> <span>텔레그램으로 추천 리포트 전송</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-8">
+    <!-- 알림 배너 -->
+    <div id="toast-box" class="hidden rounded-xl border p-4 text-sm font-medium"></div>
+
+    <!-- 상단 KPI 요약 카드 -->
+    <section class="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div class="rounded-xl bg-slate-900 border border-slate-800 p-4">
+        <p class="text-xs text-slate-400">전체 파싱·수집 물건</p>
+        <p class="text-2xl font-bold text-white mt-1">{{ stats.total_count }}<span class="text-sm font-normal text-slate-400 ml-1">건</span></p>
+        <p class="text-[11px] text-slate-500 mt-1">제외 매물 {{ stats.rejected_count }}건 포함</p>
+      </div>
+      <div class="rounded-xl bg-emerald-950/40 border border-emerald-500/40 p-4 badge-glow">
+        <p class="text-xs text-emerald-300 font-semibold">✨ 조건 충족 매력 매물</p>
+        <p class="text-2xl font-extrabold text-emerald-400 mt-1">{{ stats.attractive_count }}<span class="text-sm font-normal text-emerald-300 ml-1">건</span></p>
+        <p class="text-[11px] text-emerald-300/80 mt-1">임차인無 · 소유자거주 · 무하자</p>
+      </div>
+      <div class="rounded-xl bg-slate-900 border border-slate-800 p-4">
+        <p class="text-xs text-amber-300 font-medium">🔥 ③ 아실 재개발 구역 포함</p>
+        <p class="text-2xl font-bold text-amber-400 mt-1">{{ stats.redev_count }}<span class="text-sm font-normal text-slate-400 ml-1">건</span></p>
+        <p class="text-[11px] text-slate-400 mt-1">신속통합기획 · 모아타운 등</p>
+      </div>
+      <div class="rounded-xl bg-slate-900 border border-slate-800 p-4">
+        <p class="text-xs text-sky-300 font-medium">💎 ⑤ 공시가×126% 한도 내</p>
+        <p class="text-2xl font-bold text-sky-400 mt-1">{{ stats.zero_gap_count }}<span class="text-sm font-normal text-slate-400 ml-1">건</span></p>
+        <p class="text-[11px] text-slate-400 mt-1">10월 보증보험 무피/소액 세팅 가능</p>
+      </div>
+      <div class="rounded-xl bg-slate-900 border border-slate-800 p-4 col-span-2 md:col-span-1">
+        <p class="text-xs text-purple-300 font-medium">📈 낙찰가 추적 ({{ stats.history_count }}건)</p>
+        <p class="text-2xl font-bold text-purple-400 mt-1">{{ stats.avg_market_ratio }}<span class="text-sm font-normal text-slate-400 ml-0.5">%</span></p>
+        <p class="text-[11px] text-slate-400 mt-1">실거래 대비 낙찰가율 (감정가 대비 {{ stats.avg_appraisal_ratio }}%)</p>
+      </div>
+    </section>
+
+    <!-- 필터 탭 -->
+    <section class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+      <div class="flex flex-wrap gap-2">
+        <button onclick="filterCards('attractive')" id="tab-attractive"
+          class="filter-tab px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white">
+          ✨ 추려낸 매력 매물 ({{ stats.attractive_count }})
+        </button>
+        <button onclick="filterCards('redev')" id="tab-redev"
+          class="filter-tab px-4 py-2 rounded-lg text-sm font-medium bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800">
+          🔥 ③ 아실 재개발 구역 매물 ({{ stats.redev_count }})
+        </button>
+        <button onclick="filterCards('zerogap')" id="tab-zerogap"
+          class="filter-tab px-4 py-2 rounded-lg text-sm font-medium bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800">
+          💎 ⑤ 공시가×126% 보증보험 한도 내 ({{ stats.zero_gap_count }})
+        </button>
+        <button onclick="filterCards('rejected')" id="tab-rejected"
+          class="filter-tab px-4 py-2 rounded-lg text-sm font-medium bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800">
+          🚫 필터링 탈락 매물 비교 ({{ stats.rejected_count }})
+        </button>
+        <button onclick="filterCards('all')" id="tab-all"
+          class="filter-tab px-4 py-2 rounded-lg text-sm font-medium bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800">
+          📋 전체 물건 ({{ stats.total_count }})
+        </button>
+      </div>
+      <a href="#history-section" class="text-xs text-purple-400 hover:underline font-medium">
+        👇 하단 실제 낙찰가 추적 DB & 신규 낙찰 등록 바로가기
+      </a>
+    </section>
+
+    <!-- 매물 카드 리스트 -->
+    <section class="space-y-6" id="property-list">
+      {% for p in all_props %}
+      <article
+        class="property-card rounded-2xl border {% if p.is_attractive %}border-emerald-500/40 bg-slate-900/90{% else %}border-rose-500/40 bg-slate-900/50 hidden{% endif %} p-6 space-y-5 transition"
+        data-attractive="{{ 'true' if p.is_attractive else 'false' }}"
+        data-redev="{{ 'true' if (p.is_attractive and p.asil.is_redev_zone) else 'false' }}"
+        data-zerogap="{{ 'true' if (p.is_attractive and p.official_price.can_zero_gap_invest) else 'false' }}">
+
+        <!-- 카드 헤더 -->
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-800 pb-4">
+          <div class="space-y-1.5">
+            <div class="flex flex-wrap items-center gap-2">
+              {% if p.is_attractive %}
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                ✅ 매력 매물 선정 ({{ p.attractiveness_score }}점)
+              </span>
+              {% else %}
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                🚫 필터 제외 대상 ({{ p.attractiveness_score }}점)
+              </span>
+              {% endif %}
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-200">
+                {{ p.property_type }}
+              </span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300">
+                {{ p.court_name }} · {{ p.case_no }}
+              </span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                매각기일 {{ p.auction_date }} ({{ p.failed_count }}회 유찰)
+              </span>
+              {% if p.asil.is_redev_zone %}
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-500/20 text-orange-300 border border-orange-500/40">
+                🔥 ③ 아실 재개발구역 포함
+              </span>
+              {% endif %}
+              {% if p.official_price.can_zero_gap_invest %}
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                💎 ⑤ 공시가×126% 보증보험 한도 내
+              </span>
+              {% endif %}
+            </div>
+            <h2 class="text-lg md:text-xl font-bold text-white">{{ p.address }}</h2>
+            <p class="text-xs text-slate-400">
+              전용면적 <strong>{{ p.exclusive_area_m2 }}㎡</strong> (약 {{ (p.exclusive_area_m2 / 3.3058) | round(1) }}평) · 대지권 <strong>{{ p.land_share_m2 }}㎡</strong>
+            </p>
+          </div>
+
+          <!-- 감정가 / 최저매각가 / 적정추천입찰가 요약 -->
+          <div class="grid grid-cols-3 gap-3 bg-slate-950/80 rounded-xl p-3 border border-slate-800 min-w-[320px]">
+            <div>
+              <p class="text-[11px] text-slate-400">법원 감정가</p>
+              <p class="text-sm font-semibold text-slate-200">{{ p.appraisal_price | eok_man }}</p>
+            </div>
+            <div>
+              <p class="text-[11px] text-slate-400">최저매각가격</p>
+              <p class="text-sm font-bold text-amber-400">{{ p.min_bid_price | eok_man }}</p>
+            </div>
+            <div>
+              <p class="text-[11px] text-emerald-300 font-semibold">🎯 추천 입찰가(적정)</p>
+              <p class="text-base font-extrabold text-emerald-400">{{ p.recommendation.optimal_bid | eok_man }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 탈락 사유 표시 (필터 제외 매물인 경우) -->
+        {% if not p.is_attractive %}
+        <div class="rounded-xl bg-rose-950/40 border border-rose-500/40 p-3.5 text-xs text-rose-200 space-y-1">
+          <p class="font-bold text-rose-300">🚫 핵심 조건 미충족으로 자동 제외된 사유:</p>
+          <ul class="list-disc list-inside space-y-0.5">
+            {% for reason in p.rejection_reasons %}
+            <li>{{ reason }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        <!-- 핵심 필터 조건 검증 (임차인 없음 / 소유자 거주 중 / 권리상 하자 없음 / 미납 관리비) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="rounded-xl p-3.5 border {% if not p.has_tenant and p.occupant_type == '소유자' %}bg-emerald-950/20 border-emerald-500/30{% else %}bg-rose-950/20 border-rose-500/30{% endif %}">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-300">🏠 점유 및 임대차 관계</span>
+              {% if not p.has_tenant and p.occupant_type == '소유자' %}
+              <span class="text-xs font-bold text-emerald-400">✔ 임차인 없음 · 소유자 거주</span>
+              {% else %}
+              <span class="text-xs font-bold text-rose-400">✖ 임차인 존재 ({{ p.occupant_type }})</span>
+              {% endif %}
+            </div>
+            <p class="text-xs text-slate-300 mt-1.5">{{ p.occupancy_detail }}</p>
+          </div>
+
+          <div class="rounded-xl p-3.5 border {% if not p.has_rights_defect %}bg-emerald-950/20 border-emerald-500/30{% else %}bg-rose-950/20 border-rose-500/30{% endif %}">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-300">⚖️ 등기/권리상 하자 여부</span>
+              {% if not p.has_rights_defect %}
+              <span class="text-xs font-bold text-emerald-400">✔ 권리상 하자 없음 (인수 0원)</span>
+              {% else %}
+              <span class="text-xs font-bold text-rose-400">✖ 인수 하자 ({{ p.assumed_rights_amount | eok_man }})</span>
+              {% endif %}
+            </div>
+            <p class="text-xs text-slate-300 mt-1.5">{{ p.base_right_info }}</p>
+          </div>
+
+          <div class="rounded-xl p-3.5 border {% if p.unpaid_mgmt_fee <= 5000000 %}bg-slate-950 border-slate-800{% else %}bg-rose-950/20 border-rose-500/30{% endif %}">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-300">🧾 미납 관리비 체크</span>
+              <span class="text-xs font-bold text-amber-300">총 {{ p.unpaid_mgmt_fee | eok_man }} ({{ p.unpaid_mgmt_months }}개월)</span>
+            </div>
+            <p class="text-xs text-slate-300 mt-1.5">{{ p.unpaid_mgmt_note }}</p>
+          </div>
+        </div>
+
+        <!-- 6대 부동산 사이트 교차 분석 그리드 -->
+        <div>
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">
+            🔍 6대 부동산 플랫폼 파싱 & 교차 분석 데이터
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <!-- ① 디스코 -->
+            <div class="rounded-xl bg-slate-950/90 border border-slate-800 p-3.5 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-indigo-300">① 디스코 (지도 실제 매각가)</span>
+                <a href="{{ p.disco.source_url }}" target="_blank" class="text-[11px] text-slate-400 hover:text-white">지도보기 ↗</a>
+              </div>
+              <p class="text-base font-bold text-white">{{ p.disco.nearby_sold_price_avg | eok_man }}</p>
+              <p class="text-xs text-slate-400">{{ p.disco.recent_sold_case }} (반경 {{ p.disco.distance_m }}m)</p>
+            </div>
+
+            <!-- ② 국토부 실거래 -->
+            <div class="rounded-xl bg-slate-950/90 border border-slate-800 p-3.5 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-cyan-300">② 국토부 실거래 ({{ p.molit.dong_name }} 통째 수집)</span>
+                <span class="text-[11px] text-cyan-400 font-medium">{{ p.molit.total_tx_count }}건 수집</span>
+              </div>
+              <p class="text-base font-bold text-white">평균 {{ p.molit.similar_area_avg_price | eok_man }}</p>
+              <p class="text-xs text-slate-400">
+                범위: {{ p.molit.min_deal_price | eok_man }} ~ {{ p.molit.max_deal_price | eok_man }} ({{ p.molit.recent_trend }})
+              </p>
+            </div>
+
+            <!-- ③ 아실 -->
+            <div class="rounded-xl bg-slate-950/90 border border-slate-800 p-3.5 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-amber-300">③ 아실 (재개발 구역도 + 경매)</span>
+                <span class="text-[11px] {% if p.asil.is_redev_zone %}text-amber-400 font-bold{% else %}text-slate-400{% endif %}">
+                  {{ '정비구역 포함' if p.asil.is_redev_zone else '일반 구역' }}
+                </span>
+              </div>
+              <p class="text-sm font-bold text-white">{{ p.asil.redev_zone_name }}</p>
+              <p class="text-xs text-slate-400">{{ p.asil.asil_case_summary }}</p>
+            </div>
+
+            <!-- ④ 부동산플래닛 -->
+            <div class="rounded-xl bg-slate-950/90 border border-slate-800 p-3.5 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-teal-300">④ 부동산플래닛 (건물 연식)</span>
+                <span class="text-[11px] text-teal-400">사용승인 {{ p.bdsplanet.approval_date }}</span>
+              </div>
+              <p class="text-base font-bold text-white">준공 {{ p.bdsplanet.building_age_years }}년차 ({{ p.bdsplanet.built_year }}년식)</p>
+              <p class="text-xs text-slate-400">{{ p.bdsplanet.age_condition_grade }} · 총 {{ p.bdsplanet.total_floors }}층 ({{ p.bdsplanet.structure_type }})</p>
+            </div>
+
+            <!-- ⑤ 공시가격알리미 -->
+            <div class="rounded-xl bg-slate-950/90 border {% if p.official_price.can_zero_gap_invest %}border-sky-500/50{% else %}border-slate-800{% endif %} p-3.5 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-sky-300">⑤ 공시가격알리미 (공시가×126% 한도)</span>
+                <span class="text-[11px] font-semibold {% if p.official_price.can_zero_gap_invest %}text-sky-400{% else %}text-slate-400{% endif %}">
+                  10월 126% 기준
+                </span>
+              </div>
+              <p class="text-base font-bold text-sky-300">보증보험 한도 {{ p.official_price.jeonse_insurance_limit | eok_man }}</p>
+              <p class="text-xs text-slate-400">
+                공시가 {{ p.official_price.official_price | eok_man }} × 126%
+                {% if p.official_price.can_zero_gap_invest %}
+                <strong class="text-emerald-400">(추천입찰가 이하 → 전세 무피세팅 가능!)</strong>
+                {% endif %}
+              </p>
+            </div>
+
+            <!-- ⑥ 네이버부동산 -->
+            <div class="rounded-xl bg-slate-950/90 border border-slate-800 p-3.5 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-green-300">⑥ 네이버부동산 (현재 시장 호가)</span>
+                <span class="text-[11px] text-slate-400">매물 {{ p.naver_land.active_listing_count }}건</span>
+              </div>
+              <p class="text-base font-bold text-white">매매 최저 {{ p.naver_land.asking_sale_min | eok_man }}</p>
+              <p class="text-xs text-slate-400">매매 평균 {{ p.naver_land.asking_sale_avg | eok_man }} · 전세 평균 {{ p.naver_land.asking_jeonse_avg | eok_man }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 낙찰가 추적 기반 입찰가 추천 & 시뮬레이터 -->
+        {% if p.recommendation %}
+        <div class="rounded-xl bg-gradient-to-r from-slate-950 via-emerald-950/25 to-slate-950 border border-emerald-500/30 p-4 space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <div>
+              <h4 class="text-sm font-bold text-emerald-300">
+                🎯 유사 매물 낙찰 추적({{ p.recommendation.similar_cases_count }}건) 기반 추천 입찰가 & 예상 안전마진
+              </h4>
+              <p class="text-xs text-slate-400">
+                교차 분석 추정 시세 <strong class="text-white">{{ p.recommendation.estimated_market_value | eok_man }}</strong>
+                | 공용 미납관리비 인수 차감액 <strong class="text-amber-300">-{{ p.recommendation.assumed_unpaid_mgmt_fee | eok_man }}</strong>
+                | 명도·취득비용 <strong class="text-slate-300">-{{ p.recommendation.estimated_eviction_and_tax | eok_man }}</strong>
+              </p>
+            </div>
+            <div class="text-right">
+              <span class="text-xs text-slate-400">적정가 낙찰 시 순안전마진:</span>
+              <span class="text-lg font-extrabold text-emerald-400 ml-1">+{{ p.recommendation.expected_net_profit | eok_man }}</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="rounded-lg bg-slate-900/90 border border-slate-800 p-3">
+              <div class="flex justify-between text-xs text-slate-400">
+                <span>보수적 입찰 (고마진형)</span>
+                <span class="text-sky-400 font-semibold">낙찰확률 {{ p.recommendation.conservative_win_prob }}%</span>
+              </div>
+              <p class="text-base font-bold text-slate-200 mt-1">{{ p.recommendation.conservative_bid | eok_man }}</p>
+            </div>
+
+            <div class="rounded-lg bg-emerald-950/50 border-2 border-emerald-500/60 p-3">
+              <div class="flex justify-between text-xs text-emerald-300 font-bold">
+                <span>⭐ 적정 추천 입찰가 (Best)</span>
+                <span>낙찰확률 {{ p.recommendation.optimal_win_prob }}%</span>
+              </div>
+              <p class="text-lg font-extrabold text-white mt-1">{{ p.recommendation.optimal_bid | eok_man }}</p>
+              <p class="text-[11px] text-emerald-300/90 mt-0.5">
+                감정가 대비 {{ p.recommendation.optimal_ratio_to_appraisal }}% · 실거래 시세 대비 {{ p.recommendation.optimal_ratio_to_market }}%
+              </p>
+            </div>
+
+            <div class="rounded-lg bg-slate-900/90 border border-slate-800 p-3">
+              <div class="flex justify-between text-xs text-slate-400">
+                <span>공격형 입찰 (낙찰우선형)</span>
+                <span class="text-amber-400 font-semibold">낙찰확률 {{ p.recommendation.aggressive_win_prob }}%</span>
+              </div>
+              <p class="text-base font-bold text-slate-200 mt-1">{{ p.recommendation.aggressive_bid | eok_man }}</p>
+            </div>
+          </div>
+
+          <!-- 산정 근거 리스트 -->
+          <div class="text-xs text-slate-300 space-y-1 bg-slate-950/60 rounded-lg p-3 border border-slate-800/80">
+            <p class="font-semibold text-slate-200 mb-1">📌 입찰가 추천 산정 근거:</p>
+            {% for r in p.recommendation.rationale %}
+            <p class="text-slate-400">• {{ r }}</p>
+            {% endfor %}
+          </div>
+
+          <!-- 내 희망 입찰가 실시간 시뮬레이터 -->
+          <div class="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center gap-3">
+            <label class="text-xs font-semibold text-slate-300 shrink-0">
+              🧮 내 입찰가 시뮬레이션 (만원 단위 입력):
+            </label>
+            <div class="flex items-center gap-2">
+              <input type="number" id="sim-input-{{ p.case_no }}"
+                value="{{ (p.recommendation.optimal_bid // 10000) }}"
+                class="w-36 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-emerald-500" />
+              <span class="text-xs text-slate-400">만원</span>
+              <button onclick="simulateBid('{{ p.case_no }}')"
+                class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white transition">
+                확률·수익 계산
+              </button>
+            </div>
+            <div id="sim-result-{{ p.case_no }}" class="text-xs text-emerald-300 font-medium"></div>
+          </div>
+        </div>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </section>
+
+    <!-- 낙찰 결과 추적 DB & 신규 낙찰 결과 등록 섹션 -->
+    <section id="history-section" class="rounded-2xl bg-slate-900 border border-slate-800 p-6 space-y-6">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+        <div>
+          <h2 class="text-lg font-bold text-white flex items-center gap-2">
+            <span>📊</span>
+            <span>유사 조건(임차인無·소유자거주·무하자) 실제 낙찰 결과 추적 DB</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">
+            과거 및 최근 경매 물건이 실제로 얼마에 낙찰되었는지 추적하여, 앞으로 나오는 신규 매물의 입찰가 추천 모델에 실시간 반영합니다.
+          </p>
+        </div>
+      </div>
+
+      <!-- 낙찰 히스토리 테이블 -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-400 bg-slate-950/60">
+              <th class="py-2.5 px-3">매각일자</th>
+              <th class="py-2.5 px-3">사건번호 / 지역</th>
+              <th class="py-2.5 px-3">유형 / 연식</th>
+              <th class="py-2.5 px-3">아실 재개발</th>
+              <th class="py-2.5 px-3">감정가 / 최저가</th>
+              <th class="py-2.5 px-3">당시 실거래시세</th>
+              <th class="py-2.5 px-3 text-emerald-300">실제 낙찰가</th>
+              <th class="py-2.5 px-3">낙찰가율 (감정/시세)</th>
+              <th class="py-2.5 px-3">응찰자</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/70">
+            {% for h in history %}
+            <tr class="hover:bg-slate-800/40">
+              <td class="py-2.5 px-3 text-slate-400">{{ h.sold_date }}</td>
+              <td class="py-2.5 px-3">
+                <div class="font-semibold text-slate-200">{{ h.case_no }}</div>
+                <div class="text-slate-400">{{ h.region_name }} ({{ h.exclusive_area_m2 }}㎡)</div>
+              </td>
+              <td class="py-2.5 px-3">
+                <span>{{ h.property_type }}</span>
+                <span class="text-slate-400 block">{{ h.building_age_years }}년차</span>
+              </td>
+              <td class="py-2.5 px-3">
+                {% if h.is_redev_zone %}
+                <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold">재개발포함</span>
+                {% else %}
+                <span class="text-slate-500">일반</span>
+                {% endif %}
+              </td>
+              <td class="py-2.5 px-3">
+                <div>{{ h.appraisal_price | eok_man }}</div>
+                <div class="text-slate-400">최저 {{ h.min_bid_price | eok_man }}</div>
+              </td>
+              <td class="py-2.5 px-3 text-slate-300">{{ h.market_value_at_bid | eok_man }}</td>
+              <td class="py-2.5 px-3 font-bold text-emerald-400">{{ h.winning_bid_price | eok_man }}</td>
+              <td class="py-2.5 px-3">
+                <span class="font-semibold text-white">감정 {{ h.winning_bid_ratio_appraisal }}%</span>
+                <span class="block text-purple-300">시세 {{ h.winning_bid_ratio_market }}%</span>
+              </td>
+              <td class="py-2.5 px-3 font-semibold text-amber-300">{{ h.bidders_count }}명</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 신규 낙찰 결과 추적 등록 폼 -->
+      <div class="rounded-xl bg-slate-950 border border-slate-800 p-4 space-y-3">
+        <h3 class="text-sm font-bold text-purple-300">➕ 새로운 낙찰 결과 기록하기 (기록 시 추천 입찰가 자동 재학습)</h3>
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-2.5 text-xs">
+          <input id="rec-case" type="text" placeholder="사건번호 (예: 2026타경55102)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white" />
+          <input id="rec-region" type="text" placeholder="지역 (예: 서울 성동구 행당동)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white" />
+          <select id="rec-type" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white">
+            <option value="아파트">아파트</option>
+            <option value="다세대(빌라)">다세대(빌라)</option>
+            <option value="오피스텔">오피스텔</option>
+          </select>
+          <input id="rec-appraisal" type="number" placeholder="감정가(만원, 예: 60000)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white" />
+          <input id="rec-market" type="number" placeholder="시세(만원, 예: 58000)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white" />
+          <input id="rec-winning" type="number" placeholder="실제낙찰가(만원, 예: 51000)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white" />
+        </div>
+        <button onclick="recordWinningBid()" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-xs font-semibold text-white transition">
+          📥 낙찰 결과 저장 및 입찰 추천모델 업데이트
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function showToast(msg, isError = false) {
+      const box = document.getElementById('toast-box');
+      box.className = `rounded-xl border p-4 text-sm font-medium ${
+        isError
+          ? 'bg-rose-950/70 border-rose-500/50 text-rose-200'
+          : 'bg-emerald-950/70 border-emerald-500/50 text-emerald-200'
+      }`;
+      box.innerHTML = msg;
+      box.classList.remove('hidden');
+    }
+
+    function filterCards(mode) {
+      document.querySelectorAll('.filter-tab').forEach(btn => {
+        btn.className = 'filter-tab px-4 py-2 rounded-lg text-sm font-medium bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800';
+      });
+      const activeBtn = document.getElementById('tab-' + mode);
+      if (activeBtn) {
+        activeBtn.className = 'filter-tab px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white';
+      }
+
+      document.querySelectorAll('.property-card').forEach(card => {
+        const isAttractive = card.dataset.attractive === 'true';
+        const isRedev = card.dataset.redev === 'true';
+        const isZeroGap = card.dataset.zerogap === 'true';
+        let show = false;
+        if (mode === 'attractive') show = isAttractive;
+        else if (mode === 'redev') show = isRedev;
+        else if (mode === 'zerogap') show = isZeroGap;
+        else if (mode === 'rejected') show = !isAttractive;
+        else show = true;
+        card.classList.toggle('hidden', !show);
+      });
+    }
+
+    async function runScrapePipeline() {
+      const btn = document.getElementById('btn-scrape');
+      btn.disabled = true;
+      btn.innerHTML = '⏳ 6대 사이트 파싱 중...';
+      try {
+        const res = await fetch('/api/scrape', { method: 'POST' });
+        const data = await res.json();
+        showToast(`✅ 6대 사이트 스크래핑 및 권리/미납관리비 분석 완료! (수집 ${data.total_scraped}건 중 매력 매물 ${data.attractive_count}건 추출)`);
+        setTimeout(() => location.reload(), 900);
+      } catch (e) {
+        showToast('스크래핑 실행 중 오류가 발생했습니다.', true);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function sendTelegramReport() {
+      const btn = document.getElementById('btn-telegram');
+      btn.disabled = true;
+      btn.innerHTML = '✈️ 텔레그램 전송 중...';
+      try {
+        const res = await fetch('/api/telegram/send', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          showToast(`✈️ 텔레그램(@${data.bot_username} → ID: ${data.chat_id})으로 매력 매물 리포트 ${data.messages_sent}건 전송 완료!`);
+        } else {
+          showToast(`텔레그램 전송 실패: ${data.detail || data.error}`, true);
+        }
+      } catch (e) {
+        showToast('텔레그램 전송 중 네트워크 오류가 발생했습니다.', true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>✈️</span> <span>텔레그램으로 추천 리포트 전송</span>';
+      }
+    }
+
+    async function simulateBid(caseNo) {
+      const inputEl = document.getElementById('sim-input-' + caseNo);
+      const outEl = document.getElementById('sim-result-' + caseNo);
+      const manwon = parseInt(inputEl.value || '0', 10);
+      if (!manwon || manwon <= 0) return;
+
+      const res = await fetch('/api/simulate-bid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ case_no: caseNo, bid_amount: manwon * 10000 })
+      });
+      const data = await res.json();
+      const profitMan = Math.round(data.expected_net_profit / 10000).toLocaleString();
+      const capMan = Math.round(data.self_capital_with_jeonse_leverage / 10000).toLocaleString();
+      outEl.innerHTML = `👉 예상 낙찰확률 <strong>${data.estimated_win_probability}%</strong> (감정가 대비 ${data.ratio_to_appraisal}%) | 순안전마진 <strong>${profitMan}만원</strong> | 보증보험(126%) 전세 활용 시 실투입금 <strong>${capMan}만원</strong> (${data.verdict})`;
+    }
+
+    async function recordWinningBid() {
+      const caseNo = document.getElementById('rec-case').value.trim();
+      const region = document.getElementById('rec-region').value.trim();
+      const pType = document.getElementById('rec-type').value;
+      const appraisal = parseInt(document.getElementById('rec-appraisal').value || '0', 10) * 10000;
+      const market = parseInt(document.getElementById('rec-market').value || '0', 10) * 10000;
+      const winning = parseInt(document.getElementById('rec-winning').value || '0', 10) * 10000;
+
+      if (!caseNo || !region || !appraisal || !market || !winning) {
+        showToast('모든 항목(사건번호, 지역, 감정가, 시세, 실제낙찰가)을 입력해주세요.', true);
+        return;
+      }
+
+      const res = await fetch('/api/history/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          case_no: caseNo,
+          region_name: region,
+          property_type: pType,
+          appraisal_price: appraisal,
+          min_bid_price: Math.round(appraisal * 0.8),
+          market_value_at_bid: market,
+          official_price: Math.round(market * 0.7),
+          winning_bid_price: winning
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        showToast(`✅ [${caseNo}] 낙찰가율(시세대비 ${data.winning_bid_ratio_market}%) 기록 및 전체 매물 입찰 추천가 재산출 완료!`);
+        setTimeout(() => location.reload(), 1000);
+      }
+    }
+  </script>
+</body>
+</html>
