@@ -1,47 +1,60 @@
-import json
-import sqlite3
-from pathlib import Path
-from typing import List, Optional
+from contextlib import contextmanager
+from typing import Any, Generator, List, Optional
+import pymysql
+from pymysql.cursors import DictCursor
+
 from app.analyzer import evaluate_and_recommend
 from app.config import settings
 from app.models import AuctionProperty, WinningBidRecord
 from app.scrapers.pipeline import run_scraping_and_analysis_pipeline
 
 
-def get_connection() -> sqlite3.Connection:
-    settings.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(settings.DB_PATH))
-    conn.row_factory = sqlite3.Row
-    return conn
+@contextmanager
+def get_connection() -> Generator[pymysql.connections.Connection, None, None]:
+    conn = pymysql.connect(
+        host=settings.MYSQL_HOST,
+        port=settings.MYSQL_PORT,
+        user=settings.MYSQL_USER,
+        password=settings.MYSQL_PASSWORD,
+        database=settings.MYSQL_DATABASE,
+        charset="utf8mb4",
+        cursorclass=DictCursor,
+        autocommit=False,
+    )
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def init_db() -> None:
     with get_connection() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS auction_properties (
-                case_no TEXT PRIMARY KEY,
-                property_type TEXT NOT NULL,
-                is_attractive INTEGER NOT NULL,
-                attractiveness_score INTEGER NOT NULL,
-                payload_json TEXT NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS auction_properties (
+                    case_no VARCHAR(64) PRIMARY KEY,
+                    property_type VARCHAR(64) NOT NULL,
+                    is_attractive TINYINT(1) NOT NULL,
+                    attractiveness_score INT NOT NULL,
+                    payload_json LONGTEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """
             )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS winning_bid_history (
-                case_no TEXT PRIMARY KEY,
-                property_type TEXT NOT NULL,
-                sold_date TEXT NOT NULL,
-                winning_bid_price INTEGER NOT NULL,
-                winning_bid_ratio_appraisal REAL NOT NULL,
-                winning_bid_ratio_market REAL NOT NULL,
-                payload_json TEXT NOT NULL
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS winning_bid_history (
+                    case_no VARCHAR(64) PRIMARY KEY,
+                    property_type VARCHAR(64) NOT NULL,
+                    sold_date VARCHAR(32) NOT NULL,
+                    winning_bid_price BIGINT NOT NULL,
+                    winning_bid_ratio_appraisal DOUBLE NOT NULL,
+                    winning_bid_ratio_market DOUBLE NOT NULL,
+                    payload_json LONGTEXT NOT NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """
             )
-            """
-        )
         conn.commit()
 
 
@@ -51,76 +64,81 @@ def save_pipeline_results(
 ) -> None:
     init_db()
     with get_connection() as conn:
-        for h in history:
-            conn.execute(
-                """
-                INSERT INTO winning_bid_history (
-                    case_no, property_type, sold_date, winning_bid_price,
-                    winning_bid_ratio_appraisal, winning_bid_ratio_market, payload_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(case_no) DO UPDATE SET
-                    sold_date = excluded.sold_date,
-                    winning_bid_price = excluded.winning_bid_price,
-                    winning_bid_ratio_appraisal = excluded.winning_bid_ratio_appraisal,
-                    winning_bid_ratio_market = excluded.winning_bid_ratio_market,
-                    payload_json = excluded.payload_json
-                """,
-                (
-                    h.case_no,
-                    h.property_type,
-                    h.sold_date,
-                    h.winning_bid_price,
-                    h.winning_bid_ratio_appraisal,
-                    h.winning_bid_ratio_market,
-                    h.model_dump_json(),
-                ),
-            )
+        with conn.cursor() as cur:
+            for h in history:
+                cur.execute(
+                    """
+                    INSERT INTO winning_bid_history (
+                        case_no, property_type, sold_date, winning_bid_price,
+                        winning_bid_ratio_appraisal, winning_bid_ratio_market, payload_json
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        sold_date = VALUES(sold_date),
+                        winning_bid_price = VALUES(winning_bid_price),
+                        winning_bid_ratio_appraisal = VALUES(winning_bid_ratio_appraisal),
+                        winning_bid_ratio_market = VALUES(winning_bid_ratio_market),
+                        payload_json = VALUES(payload_json)
+                    """,
+                    (
+                        h.case_no,
+                        h.property_type,
+                        h.sold_date,
+                        h.winning_bid_price,
+                        h.winning_bid_ratio_appraisal,
+                        h.winning_bid_ratio_market,
+                        h.model_dump_json(),
+                    ),
+                )
 
-        for p in properties:
-            conn.execute(
-                """
-                INSERT INTO auction_properties (
-                    case_no, property_type, is_attractive, attractiveness_score, payload_json
-                ) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(case_no) DO UPDATE SET
-                    property_type = excluded.property_type,
-                    is_attractive = excluded.is_attractive,
-                    attractiveness_score = excluded.attractiveness_score,
-                    payload_json = excluded.payload_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    p.case_no,
-                    p.property_type,
-                    1 if p.is_attractive else 0,
-                    p.attractiveness_score,
-                    p.model_dump_json(),
-                ),
-            )
+            for p in properties:
+                cur.execute(
+                    """
+                    INSERT INTO auction_properties (
+                        case_no, property_type, is_attractive, attractiveness_score, payload_json
+                    ) VALUES (%s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        property_type = VALUES(property_type),
+                        is_attractive = VALUES(is_attractive),
+                        attractiveness_score = VALUES(attractiveness_score),
+                        payload_json = VALUES(payload_json),
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (
+                        p.case_no,
+                        p.property_type,
+                        1 if p.is_attractive else 0,
+                        p.attractiveness_score,
+                        p.model_dump_json(),
+                    ),
+                )
         conn.commit()
 
 
 def load_all_properties(attractive_only: bool = False) -> List[AuctionProperty]:
     init_db()
     with get_connection() as conn:
-        if attractive_only:
-            rows = conn.execute(
-                "SELECT payload_json FROM auction_properties WHERE is_attractive = 1 ORDER BY attractiveness_score DESC"
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT payload_json FROM auction_properties ORDER BY is_attractive DESC, attractiveness_score DESC"
-            ).fetchall()
+        with conn.cursor() as cur:
+            if attractive_only:
+                cur.execute(
+                    "SELECT payload_json FROM auction_properties WHERE is_attractive = 1 ORDER BY attractiveness_score DESC"
+                )
+            else:
+                cur.execute(
+                    "SELECT payload_json FROM auction_properties ORDER BY is_attractive DESC, attractiveness_score DESC"
+                )
+            rows = cur.fetchall()
     return [AuctionProperty.model_validate_json(r["payload_json"]) for r in rows]
 
 
 def load_property_by_case_no(case_no: str) -> Optional[AuctionProperty]:
     init_db()
     with get_connection() as conn:
-        row = conn.execute(
-            "SELECT payload_json FROM auction_properties WHERE case_no = ?",
-            (case_no,),
-        ).fetchone()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT payload_json FROM auction_properties WHERE case_no = %s",
+                (case_no,),
+            )
+            row: Optional[dict[str, Any]] = cur.fetchone()
     if not row:
         return None
     return AuctionProperty.model_validate_json(row["payload_json"])
@@ -129,9 +147,11 @@ def load_property_by_case_no(case_no: str) -> Optional[AuctionProperty]:
 def load_winning_history() -> List[WinningBidRecord]:
     init_db()
     with get_connection() as conn:
-        rows = conn.execute(
-            "SELECT payload_json FROM winning_bid_history ORDER BY sold_date DESC"
-        ).fetchall()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT payload_json FROM winning_bid_history ORDER BY sold_date DESC"
+            )
+            rows = cur.fetchall()
     return [WinningBidRecord.model_validate_json(r["payload_json"]) for r in rows]
 
 

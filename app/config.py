@@ -18,6 +18,13 @@ class Settings:
     VERSION: str = "1.0.0"
     DB_PATH: Path = PROJECT_ROOT / "data" / "auction_radar.db"
 
+    # Docker MySQL Configuration
+    MYSQL_HOST: str = os.getenv("MYSQL_HOST", "127.0.0.1").strip()
+    MYSQL_PORT: int = int(os.getenv("MYSQL_PORT", "3306"))
+    MYSQL_USER: str = os.getenv("MYSQL_USER", "devuser").strip()
+    MYSQL_PASSWORD: str = os.getenv("MYSQL_PASSWORD", "devpass123!").strip()
+    MYSQL_DATABASE: str = os.getenv("MYSQL_DATABASE", "auction_radar").strip()
+
     # Telegram Configuration from ~/.env
     TELEGRAM_USER_ID: str = os.getenv("TELEGRAM_USER_ID", "").strip()
     TELEGRAM_BOT_1: str = os.getenv("TELEGRAM_BOT_1", "").strip().replace(" ", "")
