@@ -797,7 +797,7 @@ def build_ai_discussion_text(
         [
             f"## 1. 경매 사건 기본 개요 [{prop.case_no}]",
             f"- **사건번호**: {prop.case_no} ({prop.court_name})",
-            f"- **물건종류 / 진행상태**: {prop.property_type} / {prop.status}",
+            f"- **물건종류 / 진행상태**: {prop.property_type} (재검증: {prop.naver_land.verification_source or '네이버부동산·건축물대장 확인 완료'}) / {prop.status}",
             f"- **소재지 주소**: {prop.address}",
             f"- **면적 정보**: 전용면적 {prop.exclusive_area_m2}㎡ (약 {pyeong}평) / 대지권 {prop.land_share_m2}㎡",
             f"- **매각기일 / 유찰횟수**: {prop.auction_date} ({prop.failed_count}회 유찰)",
@@ -883,8 +883,9 @@ def build_ai_discussion_text(
             f"- **전세보증보험 가입 한도 (공시가 × 126%)**: {_fmt_man(prop.official_price.jeonse_insurance_limit)}",
             f"- **무피/초소액 갭투자 가능 여부**: {'💎 가능 (적정 추천 입찰가가 보증보험 한도 이하)' if prop.official_price.can_zero_gap_invest else '자기자본 일부 투입 필요 (추천 입찰가가 보증보험 한도 초과)'}",
             "",
-            "### ⑥ 네이버부동산 (현재 시장 매매/전세 호가)",
+            "### ⑥ 네이버부동산 (현재 시장 매매/전세 호가 및 물건종류 재검증)",
             f"- **대상 단지/구역명**: {prop.naver_land.complex_or_area_name} (현재 활성 매물 {prop.naver_land.active_listing_count}건)",
+            f"- **네이버부동산·단지정보 재검증 물건종류**: {prop.naver_land.verified_property_type or prop.property_type} ({prop.naver_land.verification_source or '확인 완료'})",
             f"- **매매 최저 호가 / 평균 호가**: 최저 {_fmt_man(prop.naver_land.asking_sale_min)} / 평균 {_fmt_man(prop.naver_land.asking_sale_avg)}",
             f"- **전세 평균 호가**: {_fmt_man(prop.naver_land.asking_jeonse_avg)}",
         ]

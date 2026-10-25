@@ -170,4 +170,60 @@ def test_pipeline_and_api_endpoints():
     assert "상계동" in hist_case_data["property"]["address"]
 
 
+def test_naver_land_property_type_reverification_prevents_officetel_misclassification():
+    """
+    수집 시 리치고 등 광고 스니펫('아파트·오피스텔 시세') 때문에 아파트가 오피스텔로 잘못 수집되더라도,
+    수집 후 NaverLandScraper.verify_property_type() 및 build_property_from_raw_dict()가
+    네이버부동산·단지정보를 대조해 정확히 '아파트'로 다시 인식하여 저장하는지 검증합니다.
+    """
+    from app.scrapers.parsers import NaverLandScraper
+
+    # 1) 동탄자이파밀리에 아파트가 초기에 '오피스텔'로 잘못 분류된 경우 -> '아파트'로 재인식
+    v_type1, v_src1 = NaverLandScraper.verify_property_type(
+        address="경기도 화성시 장지동 963 동탄자이파밀리에 3206동 3층302호 아파트",
+        initial_type="오피스텔",
+        exclusive_area_m2=84.98,
+        auction_snippets="리치고는 아파트·오피스텔 시세를 제공합니다. 화성 동탄자이파밀리에 84.98㎡ 아파트 경매 2025타경1331",
+        enable_network=False,
+    )
+    assert v_type1 == "아파트"
+    assert len(v_src1) > 0
+
+    # 2) 송파구 거여동 현대아파트가 초기에 '오피스텔'로 잘못 분류된 경우 -> '아파트'로 재인식
+    v_type2, _ = NaverLandScraper.verify_property_type(
+        address="서울특별시 송파구 거여동 44 현대아파트 202동 4층 404호",
+        initial_type="오피스텔",
+        exclusive_area_m2=84.8,
+        enable_network=False,
+    )
+    assert v_type2 == "아파트"
+
+    # 3) 단지명에 '아파트' 단어가 없더라도 대단지 동호수(104동 1102호) + 브랜드(래미안/푸르지오/자이 등)면 '아파트'로 재인식
+    v_type3, _ = NaverLandScraper.verify_property_type(
+        address="서울특별시 마포구 공덕동 465 공덕래미안 104동 1102호",
+        initial_type="오피스텔",
+        exclusive_area_m2=59.96,
+        enable_network=False,
+    )
+    assert v_type3 == "아파트"
+
+    # 4) 실제 오피스텔(관악센트럴타워 34.5㎡, 동 표기 없음)은 '오피스텔' 유지
+    v_type4, _ = NaverLandScraper.verify_property_type(
+        address="서울특별시 관악구 봉천동 859-17 관악센트럴타워 904호",
+        initial_type="오피스텔",
+        complex_name="관악센트럴타워 (봉천동)",
+        exclusive_area_m2=34.5,
+        enable_network=False,
+    )
+    assert v_type4 == "오피스텔"
+
+    # 5) AI 토론 텍스트 생성 시 아파트로 정상 인식되어 신생아특례·생애최초 대출이 '오피스텔 제외'로 틀리게 판정되지 않는지 검증
+    client = TestClient(app)
+    res_1331 = client.get("/api/properties/2025타경1331/ai-text?include_prompt=true")
+    if res_1331.status_code == 200:
+        data_1331 = res_1331.json()
+        assert data_1331["property_type"] == "아파트"
+        assert "오피스텔은 준주택으로 디딤돌/신생아특례 제외" not in data_1331["text"]
+
+
 

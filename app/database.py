@@ -195,6 +195,22 @@ def get_or_analyze_property_by_case_no(
     if not force_reanalyze and not has_overrides:
         existing = load_property_by_case_no(norm_case)
         if existing and existing.recommendation:
+            from app.scrapers.parsers import NaverLandScraper
+
+            v_type, v_src = NaverLandScraper.verify_property_type(
+                address=existing.address,
+                initial_type=existing.property_type,
+                complex_name=existing.naver_land.complex_or_area_name,
+                exclusive_area_m2=existing.exclusive_area_m2,
+                enable_network=False,
+            )
+            if v_type != existing.property_type or not existing.naver_land.verified_property_type:
+                history = load_winning_history()
+                existing.property_type = v_type
+                existing.naver_land.verified_property_type = v_type
+                existing.naver_land.verification_source = v_src
+                existing = evaluate_and_recommend(existing, history)
+                upsert_property(existing)
             return existing
 
     history = load_winning_history()
@@ -250,6 +266,47 @@ def record_new_winning_bid(record: WinningBidRecord) -> List[AuctionProperty]:
     return updated_props
 
 
+def reverify_and_sync_all_stored_properties(enable_network: bool = False) -> List[AuctionProperty]:
+    """
+    DB에 이미 수집·저장되어 있는 모든 경매 매물에 대해 네이버부동산·단지정보 기반
+    물건종류(아파트 vs 오피스텔 vs 다세대) 재인식을 수행하고, 오분류된 매물이 있으면
+    입찰가 추천 및 자금 전략 기준을 재산출하여 DB에 즉시 반영합니다.
+    """
+    from app.scrapers.parsers import NaverLandScraper
+
+    init_db()
+    props = load_all_properties(attractive_only=False)
+    history = load_winning_history()
+    updated_any = False
+
+    for idx, p in enumerate(props):
+        v_type, v_src = NaverLandScraper.verify_property_type(
+            address=p.address,
+            initial_type=p.property_type,
+            complex_name=p.naver_land.complex_or_area_name,
+            exclusive_area_m2=p.exclusive_area_m2,
+            enable_network=enable_network,
+        )
+        if (
+            v_type != p.property_type
+            or p.naver_land.verified_property_type != v_type
+            or not p.naver_land.verification_source
+            or p.official_price.official_price % 1_000_000 != 0
+        ):
+            p.property_type = v_type
+            p.naver_land.verified_property_type = v_type
+            p.naver_land.verification_source = v_src
+            if p.official_price.official_price % 1_000_000 != 0:
+                p.official_price.official_price = int(round(p.official_price.official_price, -6))
+            props[idx] = evaluate_and_recommend(p, history)
+            upsert_property(props[idx])
+            updated_any = True
+
+    if updated_any:
+        props.sort(key=lambda x: (x.is_attractive, x.attractiveness_score), reverse=True)
+    return props
+
+
 def ensure_seeded() -> None:
     init_db()
     props = load_all_properties(attractive_only=False)
@@ -268,5 +325,8 @@ def ensure_seeded() -> None:
         if sample.suggested_optimal_bid == 0 or sample.second_bid_price == 0:
             props, history = run_scraping_and_analysis_pipeline()
             save_pipeline_results(props, history)
+
+    # 기존 수집되어 저장된 매물 중 아파트가 오피스텔 등으로 잘못 분류된 건들을 일괄 재검증 및 보정 저장
+    reverify_and_sync_all_stored_properties(enable_network=False)
 
 

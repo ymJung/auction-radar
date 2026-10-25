@@ -300,13 +300,246 @@ class OfficialPriceScraper:
 
 
 class NaverLandScraper:
-    """⑥ 네이버부동산 (new.land.naver.com): 현재 단지/인근 매매 및 전세 호가 파서"""
+    """⑥ 네이버부동산 (new.land.naver.com / fin.land.naver.com): 현재 단지/인근 매매·전세 호가 파서 및 물건종류(아파트 vs 오피스텔 vs 다세대) 교차 재검증기"""
+
+    APT_BRAND_KEYWORDS = (
+        "아파트",
+        "래미안",
+        "푸르지오",
+        "자이",
+        "아이파크",
+        "힐스테이트",
+        "롯데캐슬",
+        "더샵",
+        "e편한세상",
+        "이편한세상",
+        "센트레빌",
+        "위브",
+        "데시앙",
+        "스위트닷홈",
+        "아크로",
+        "디에이치",
+        "호반베르디움",
+        "우미린",
+        "중흥S클래스",
+        "한신더휴",
+        "꿈에그린",
+        "포레나",
+        "sk뷰",
+        "SK뷰",
+        "파크뷰",
+        "마을",
+        "주공",
+        "한진타운",
+        "파밀리에",
+        "휴먼시아",
+        "리첸시아",
+        "트리지움",
+        "엘스",
+        "리센츠",
+        "헬리오시티",
+        "파크리오",
+    )
+
+    OFFICETEL_KEYWORDS = (
+        "오피스텔",
+        "아파텔",
+        "트윈빌",
+        "이즈타워",
+        "센트럴타워",
+        "인계스카이",
+        "오피스",
+        "스테이",
+    )
+
+    VILLA_KEYWORDS = (
+        "다세대",
+        "빌라",
+        "연립",
+        "벨리",
+        "하우스",
+        "그린빌",
+        "센트럴빌",
+        "맨션",
+        "타운하우스",
+    )
+
+    @staticmethod
+    def extract_core_address_and_complex(address: str, complex_name: str = "") -> Tuple[str, str]:
+        """주소에서 동/층/호 및 사건번호 꼬리표를 제거한 핵심 소재지·단지명을 추출합니다."""
+        cleaned = re.sub(r"\(20\d{2}타경\d+[^)]*\)", "", address).strip()
+        core = re.sub(r"\s*\d+동\s*\d*층?\s*\d*호?.*$", "", cleaned)
+        core = re.sub(r"\s*\d+층\s*\d*호?.*$", "", core)
+        core = re.sub(r"\s*\d+호.*$", "", core).strip()
+
+        bldg_match = re.search(
+            r"(?:동|로|길|읍|면)\s+[0-9\-]+(?:번지)?\s+([가-힣A-Za-z0-9\s]{2,20}?)(?:\s+\d+동|\s+\d+층|\s+\d+호|\s+아파트|\s+오피스텔|\s+빌라|$)",
+            cleaned,
+        )
+        extracted_complex = bldg_match.group(1).strip() if bldg_match else ""
+        if not extracted_complex and complex_name:
+            extracted_complex = re.sub(r"\([^)]*\)", "", complex_name).strip()
+        return core, extracted_complex
+
+    @classmethod
+    def verify_property_type(
+        cls,
+        address: str,
+        initial_type: str = "",
+        complex_name: str = "",
+        exclusive_area_m2: float = 0.0,
+        auction_snippets: str = "",
+        enable_network: bool = True,
+    ) -> Tuple[str, str]:
+        """
+        수집 후 네이버부동산(fin.land.naver.com / m.land.naver.com) 및 포털 부동산 단지 정보와
+        소재지/단지명/동호수/전용면적을 교차 대조하여 '오피스텔'로 오인식된 '아파트' 등을 정확히 재분류합니다.
+
+        Returns:
+            (verified_property_type, verification_source_note)
+        """
+        addr_norm = (address or "").strip()
+        comp_norm = (complex_name or "").strip()
+        combined_local = f"{addr_norm} {comp_norm}"
+
+        # 1단계: 주소 및 단지명에 명시적 유형/브랜드 및 동(XXX동) 표기가 있는지 1차 구조 분석
+        has_dong_number = bool(re.search(r"\b\d{1,4}동\b", addr_norm))
+        explicit_apt_in_addr = "아파트" in addr_norm
+        explicit_off_in_addr = "오피스텔" in combined_local
+        explicit_villa_in_addr = any(k in combined_local for k in cls.VILLA_KEYWORDS) and not has_dong_number
+
+        core_addr, extracted_bldg = cls.extract_core_address_and_complex(addr_norm, comp_norm)
+
+        # 2단계: 네이버부동산 모바일/핀테크 단지 검색 및 네이버 부동산 통합검색 스니펫 실시간 조회
+        naver_land_type = ""
+        naver_land_evidence = ""
+
+        if enable_network and core_addr and len(core_addr) >= 4:
+            # 2-A) m.land.naver.com / fin.land.naver.com 직접 단지 매칭 시도
+            if extracted_bldg and len(extracted_bldg) >= 3:
+                try:
+                    with httpx.Client(headers=DEFAULT_HEADERS, timeout=4.0, follow_redirects=True) as client:
+                        resp = client.get(f"https://m.land.naver.com/search/result/{extracted_bldg}")
+                        if resp.status_code == 200 and "검색결과가 없습니다" not in resp.text:
+                            soup = BeautifulSoup(resp.text, "lxml")
+                            land_txt = soup.get_text(" ", strip=True)
+                            # fin.land.naver.com 단지 헤더 패턴: "관심단지 아파트 1,067세대" 또는 "관심단지 오피스텔 440세대"
+                            m_complex_type = re.search(
+                                r"관심단지\s*(아파트|오피스텔|주상복합|연립|다세대|빌라)\s*[0-9,]*세대",
+                                land_txt,
+                            )
+                            if m_complex_type:
+                                raw_t = m_complex_type.group(1)
+                                if raw_t in ("아파트", "주상복합"):
+                                    # 단, 정자아이파크처럼 오피스텔 전용이거나 면적이 소형(<=45㎡)인 경우 구분
+                                    if raw_t == "아파트" or exclusive_area_m2 >= 50.0:
+                                        naver_land_type = "아파트"
+                                        naver_land_evidence = f"네이버부동산 단지정보({extracted_bldg}: {raw_t} 확인)"
+                                elif raw_t == "오피스텔":
+                                    if not explicit_apt_in_addr and not (has_dong_number and exclusive_area_m2 >= 55.0):
+                                        naver_land_type = "오피스텔"
+                                        naver_land_evidence = f"네이버부동산 단지정보({extracted_bldg}: 오피스텔 확인)"
+                except Exception:
+                    pass
+
+            # 2-B) 네이버 통합검색 (소재지 + 단지명 + 세대수/부동산) 기반 아파트 vs 오피스텔 빈도·문맥 검증
+            if not naver_land_type:
+                try:
+                    query = f"{core_addr} 세대수 용적률"
+                    with httpx.Client(headers=DEFAULT_HEADERS, timeout=4.0, follow_redirects=True) as client:
+                        resp = client.get(
+                            "https://search.naver.com/search.naver",
+                            params={"query": query},
+                        )
+                        if resp.status_code == 200:
+                            soup = BeautifulSoup(resp.text, "lxml")
+                            search_txt = soup.get_text(" ", strip=True)
+                            # 광고/푸터의 일반 문구('아파트·오피스텔 시세')를 제거한 순수 문맥 카운트
+                            cleaned_search = re.sub(r"아파트[·/,\s]*오피스텔", "", search_txt)
+                            apt_cnt = cleaned_search.count("아파트")
+                            off_cnt = cleaned_search.count("오피스텔")
+                            villa_cnt = (
+                                cleaned_search.count("다세대")
+                                + cleaned_search.count("빌라")
+                                + cleaned_search.count("연립")
+                            )
+
+                            if apt_cnt >= 10 and apt_cnt >= off_cnt * 2:
+                                naver_land_type = "아파트"
+                                naver_land_evidence = (
+                                    f"네이버부동산·포털 단지검증(아파트 매칭 {apt_cnt}건 vs 오피스텔 {off_cnt}건)"
+                                )
+                            elif off_cnt >= 6 and off_cnt > apt_cnt:
+                                naver_land_type = "오피스텔"
+                                naver_land_evidence = (
+                                    f"네이버부동산·포털 단지검증(오피스텔 매칭 {off_cnt}건 vs 아파트 {apt_cnt}건)"
+                                )
+                            elif villa_cnt >= 6 and villa_cnt > apt_cnt:
+                                naver_land_type = "다세대(빌라)"
+                                naver_land_evidence = (
+                                    f"네이버부동산·포털 단지검증(다세대/빌라 매칭 {villa_cnt}건)"
+                                )
+                except Exception:
+                    pass
+
+        # 3단계: 경매 원천 검색 스니펫(auction_snippets) 문맥 정밀 분석 (광고 문구 배제)
+        snippet_type = ""
+        snippet_evidence = ""
+        if auction_snippets:
+            cleaned_snip = re.sub(r"아파트[·/,\s]*오피스텔", "", auction_snippets)
+            apt_s = cleaned_snip.count("아파트")
+            off_s = cleaned_snip.count("오피스텔")
+            villa_s = cleaned_snip.count("다세대") + cleaned_snip.count("빌라") + cleaned_snip.count("연립")
+            if apt_s > off_s and apt_s >= 2:
+                snippet_type = "아파트"
+                snippet_evidence = f"경매문건·포털 스니펫 교차검증(아파트 {apt_s}회 > 오피스텔 {off_s}회)"
+            elif off_s > apt_s and off_s >= 2:
+                snippet_type = "오피스텔"
+                snippet_evidence = f"경매문건·포털 스니펫 교차검증(오피스텔 {off_s}회 > 아파트 {apt_s}회)"
+            elif villa_s > apt_s and villa_s >= 2:
+                snippet_type = "다세대(빌라)"
+                snippet_evidence = f"경매문건·포털 스니펫 교차검증(다세대/빌라 {villa_s}회)"
+
+        # 4단계: 종합 판정 우선순위 결정
+        # (1) 주소 자체에 '아파트'가 명시되어 있거나, 'XXX동 XXX호' 대단지 동호수 구조이면서 브랜드/전용면적(>=49㎡)이 아파트인 경우
+        if explicit_apt_in_addr:
+            return "아파트", naver_land_evidence or "소재지/건축물대장 아파트 명시 및 네이버부동산 교차확인"
+
+        if explicit_off_in_addr and not has_dong_number:
+            return "오피스텔", naver_land_evidence or "소재지/단지명 오피스텔 확인"
+
+        if explicit_villa_in_addr:
+            return "다세대(빌라)", naver_land_evidence or "소재지/건축물대장 다세대(빌라) 확인"
+
+        if any(k in combined_local for k in cls.OFFICETEL_KEYWORDS) and exclusive_area_m2 < 50.0 and not has_dong_number:
+            return "오피스텔", naver_land_evidence or "네이버부동산 단지정보 오피스텔(전용면적·건물명) 확인"
+
+        if has_dong_number and (
+            any(b in combined_local for b in cls.APT_BRAND_KEYWORDS) or exclusive_area_m2 >= 50.0
+        ):
+            return "아파트", naver_land_evidence or f"네이버부동산·건축물대장 단지검증({extracted_bldg or '공동주택'} 아파트)"
+
+        if naver_land_type:
+            return naver_land_type, naver_land_evidence
+
+        if snippet_type:
+            return snippet_type, snippet_evidence
+
+        if any(b in combined_local for b in cls.APT_BRAND_KEYWORDS):
+            return "아파트", "단지 브랜드/명칭 기반 아파트 확인"
+
+        if initial_type in ("아파트", "오피스텔", "다세대(빌라)"):
+            return initial_type, f"원천 분류({initial_type}) 유지"
+
+        return "아파트", "기본 공동주택(아파트) 분류"
 
     @staticmethod
     def parse_articles_json(
         complex_name: str,
         sale_prices: List[int],
         jeonse_prices: List[int],
+        verified_property_type: str = "",
+        verification_source: str = "",
     ) -> NaverLandData:
         sale_min = min(sale_prices) if sale_prices else 0
         sale_avg = int(sum(sale_prices) / len(sale_prices)) if sale_prices else 0
@@ -318,6 +551,8 @@ class NaverLandScraper:
             asking_sale_avg=sale_avg,
             asking_jeonse_avg=jeonse_avg,
             active_listing_count=len(sale_prices) + len(jeonse_prices),
+            verified_property_type=verified_property_type,
+            verification_source=verification_source,
         )
 
 
