@@ -146,7 +146,7 @@ class AuctionProperty(BaseModel):
 
 
 class WinningBidRecord(BaseModel):
-    """과거 및 실시간 추적된 낙찰 결과 히스토리 (입찰가 추천 학습/통계용)"""
+    """과거 및 실시간 추적된 낙찰 결과 히스토리 (입찰가 추천 학습/통계 및 백테스팅 시뮬레이션용)"""
     id: Optional[int] = None
     case_no: str
     court_name: str
@@ -165,7 +165,36 @@ class WinningBidRecord(BaseModel):
     market_value_at_bid: int
     official_price: int
     winning_bid_price: int
+    second_bid_price: int = Field(default=0, description="차순위(2등) 입찰가(원)")
     winning_bid_ratio_appraisal: float  # 감정가 대비 낙찰가율(%)
     winning_bid_ratio_market: float     # 실거래 시세 대비 낙찰가율(%)
     bidders_count: int
     sold_date: str
+
+    # 과거 데이터 기준 AI 제시(추천) 입찰가 및 수익·2등 격차 시뮬레이션 결과
+    suggested_conservative_bid: int = Field(default=0, description="당시 기준 제시 보수적 입찰가(원)")
+    suggested_optimal_bid: int = Field(default=0, description="당시 기준 제시 적정 입찰가(원)")
+    suggested_aggressive_bid: int = Field(default=0, description="당시 기준 제시 공격형 입찰가(원)")
+    suggested_optimal_ratio_appraisal: float = Field(default=0.0, description="제시 적정가의 감정가 대비 비율(%)")
+    suggested_optimal_ratio_market: float = Field(default=0.0, description="제시 적정가의 시세 대비 비율(%)")
+
+    assumed_unpaid_mgmt_fee: int = Field(default=0, description="공용부분 인수 미납관리비 추산액(원)")
+    estimated_eviction_and_tax: int = Field(default=0, description="명도비 및 취득세 등 부대비용 추산액(원)")
+
+    suggested_optimal_net_profit: int = Field(default=0, description="제시 적정가로 낙찰되었다면 얻었을 순수익/이득(원)")
+    suggested_conservative_net_profit: int = Field(default=0, description="제시 보수적 입찰가로 낙찰 시 순수익/이득(원)")
+    suggested_aggressive_net_profit: int = Field(default=0, description="제시 공격형 입찰가로 낙찰 시 순수익/이득(원)")
+    actual_winner_net_profit: int = Field(default=0, description="실제 1등 낙찰자의 순수익/이득(원)")
+    profit_diff_vs_actual: int = Field(default=0, description="제시 적정가 낙찰 시 실제 1등 대비 추가 이득 차액(원)")
+
+    gap_1st_to_2nd_price: int = Field(default=0, description="실제 1등 낙찰가와 2등 입찰가의 차액(원)")
+    gap_1st_to_2nd_ratio: float = Field(default=0.0, description="1등과 2등의 감정가 대비 격차(%p)")
+    gap_suggested_to_1st: int = Field(default=0, description="제시 적정가와 실제 1등 낙찰가의 차이(원, 제시가 - 1등가)")
+    gap_suggested_to_2nd: int = Field(default=0, description="제시 적정가와 실제 2등 입찰가의 차이(원, 제시가 - 2등가)")
+
+    would_win_with_optimal: bool = Field(default=False, description="제시 적정가로 실제 1등 낙찰 가능했는지 여부")
+    would_beat_2nd_with_optimal: bool = Field(default=False, description="제시 적정가로 실제 2등(차순위)을 이겼는지 여부")
+    would_win_with_aggressive: bool = Field(default=False, description="제시 공격형 입찰가로 실제 1등 낙찰 가능했는지 여부")
+    simulation_badge: str = Field(default="", description="과거 입찰 시뮬레이션 핵심 배지")
+    simulation_verdict: str = Field(default="", description="과거 입찰 시뮬레이션 상세 분석 코멘트")
+

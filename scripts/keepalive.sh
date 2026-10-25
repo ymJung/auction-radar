@@ -17,15 +17,15 @@ if [ -f "$PID_FILE" ]; then
     fi
 fi
 
-# Check if port 8000 is already bound by our uvicorn process
-EXISTING_PID=$(pgrep -f "[u]vicorn app.main:app --host 0.0.0.0 --port 8000" | head -n 1 || true)
+# Check if port 8080 is already bound by our uvicorn process
+EXISTING_PID=$(pgrep -f "[u]vicorn app.main:app --host 0.0.0.0 --port 8080" | head -n 1 || true)
 if [ -n "$EXISTING_PID" ]; then
     echo "$EXISTING_PID" > "$PID_FILE"
     exit 0
 fi
 
 cd "$PROJECT_DIR"
-nohup setsid "$UV_BIN" run uvicorn app.main:app --host 0.0.0.0 --port 8000 >> "$SERVER_LOG" 2>&1 < /dev/null &
+nohup setsid "$UV_BIN" run uvicorn app.main:app --host 0.0.0.0 --port 8080 >> "$SERVER_LOG" 2>&1 < /dev/null &
 NEW_PID=$!
 echo "$NEW_PID" > "$PID_FILE"
 echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Started AuctionRadar server (PID=$NEW_PID)" >> "$SERVER_LOG"

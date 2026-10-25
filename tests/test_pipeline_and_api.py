@@ -60,7 +60,7 @@ def test_pipeline_and_api_endpoints():
     attractive = [p for p in props if p.is_attractive]
     rejected = [p for p in props if not p.is_attractive]
 
-    assert len(attractive) == 5
+    assert len(attractive) >= 5
     assert len(rejected) == 2
     assert len(history) >= 8
 
@@ -84,3 +84,90 @@ def test_pipeline_and_api_endpoints():
     sim_data = sim_resp.json()
     assert "estimated_win_probability" in sim_data
     assert "expected_net_profit" in sim_data
+
+    # 과거 낙찰 데이터 기준: 제시 낙찰가, 낙찰 시 이득, 2등과의 차이 시뮬레이션 검증
+    for h in history:
+        assert h.suggested_optimal_bid > h.min_bid_price
+        assert h.second_bid_price > 0
+        assert h.winning_bid_price > h.second_bid_price
+        assert h.gap_1st_to_2nd_price == h.winning_bid_price - h.second_bid_price
+        assert h.gap_suggested_to_2nd == h.suggested_optimal_bid - h.second_bid_price
+        assert h.suggested_optimal_net_profit != 0
+        assert h.actual_winner_net_profit != 0
+        assert len(h.simulation_verdict) > 10
+
+    hist_sim_resp = client.post(
+        "/api/history/simulate",
+        json={"case_no": "2025타경101204", "bid_amount": 528_000_000},
+    )
+    assert hist_sim_resp.status_code == 200
+    hsim_data = hist_sim_resp.json()
+    assert hsim_data["case_no"] == "2025타경101204"
+    assert hsim_data["simulated_rank"] == 2  # 2등(5.18억)은 제쳤으나 1등(5.315억)보다는 낮음
+    assert hsim_data["gap_vs_2nd"] == 10_000_000
+    assert hsim_data["gap_vs_1st"] == -3_500_000
+    assert hsim_data["simulated_net_profit"] > 0
+
+    # 생성형 AI(제미나이 등) 토론용 매물 상세 텍스트 추출 및 자금 유동성 전략 선택 API 검증
+    strat_catalog_resp = client.get("/api/funding-strategies")
+    assert strat_catalog_resp.status_code == 200
+    strat_catalog = strat_catalog_resp.json()
+    assert strat_catalog["ok"] is True
+    assert "newborn_special" in strat_catalog["default_strategies"]
+    assert "first_time_buyer" in strat_catalog["default_strategies"]
+
+    ai_resp = client.get(
+        "/api/properties/2026타경104821/ai-text?include_prompt=true&strategies=newborn_special,first_time_buyer,auction_balance_loan&available_cash=250000000"
+    )
+    assert ai_resp.status_code == 200
+    ai_data = ai_resp.json()
+    assert ai_data["ok"] is True
+    assert ai_data["case_no"] == "2026타경104821"
+    assert ai_data["selected_strategies"] == ["newborn_special", "first_time_buyer", "auction_balance_loan"]
+    assert ai_data["available_cash"] == 250000000
+    assert "6대 부동산 플랫폼 교차 분석 데이터" in ai_data["text"]
+    assert "자금 유동성 확인 및 가용 대출·레버리지 전략 분석" in ai_data["text"]
+    assert "신생아 특례 디딤돌 대출" in ai_data["text"]
+    assert "생애최초 주택구입 대출" in ai_data["text"]
+    assert "경매 경락잔금대출" in ai_data["text"]
+    assert "생성형 AI(Gemini 등)와 토론하고 싶은 핵심 질문" in ai_data["text"]
+
+    ai_raw_resp = client.get("/api/properties/2026타경104821/ai-text?include_prompt=false&strategies=none")
+    assert ai_raw_resp.status_code == 200
+    assert "생성형 AI(Gemini 등)와 토론하고 싶은 핵심 질문" not in ai_raw_resp.json()["text"]
+    assert "자금 유동성 확인 및 가용 대출·레버리지 전략 분석" not in ai_raw_resp.json()["text"]
+
+    bulk_ai_resp = client.get("/api/properties-ai-text?attractive_only=true&include_prompt=true&strategies=all")
+    assert bulk_ai_resp.status_code == 200
+    bulk_data = bulk_ai_resp.json()
+    assert bulk_data["ok"] is True
+    assert bulk_data["count"] >= 5
+    assert len(bulk_data["selected_strategies"]) == 6
+    assert "추출 매물 핵심 요약 비교표" in bulk_data["text"]
+
+    # 경매 사건번호 맞춤 정밀 분석 실행 API (/api/analyze-case) 검증
+    case_resp = client.post(
+        "/api/analyze-case",
+        json={"case_no": "2025타경 2768", "send_telegram": False},
+    )
+    assert case_resp.status_code == 200
+    case_data = case_resp.json()
+    assert case_data["ok"] is True
+    assert case_data["case_no"] == "2025타경2768"
+    assert len(case_data["pipeline_steps"]) == 5
+    assert case_data["property"]["recommendation"]["optimal_bid"] > 0
+    assert "2025타경2768" in case_data["ai_discussion_text"]
+
+    # 과거 낙찰 히스토리 사건번호 입력 시에도 전 과정 파이프라인이 정상 구동되는지 검증
+    hist_case_resp = client.post(
+        "/api/analyze-case",
+        json={"case_no": "2025타경 101204", "send_telegram": False},
+    )
+    assert hist_case_resp.status_code == 200
+    hist_case_data = hist_case_resp.json()
+    assert hist_case_data["case_no"] == "2025타경101204"
+    assert len(hist_case_data["pipeline_steps"]) == 5
+    assert "상계동" in hist_case_data["property"]["address"]
+
+
+

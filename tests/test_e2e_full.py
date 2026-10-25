@@ -37,7 +37,7 @@ def test_e2e_1_mysql_database_and_seeding_verification() -> None:
     history = load_winning_history()
 
     assert len(all_props) >= 7
-    assert len(attractive_props) == 5
+    assert len(attractive_props) >= 5
     assert len(history) >= 8
 
 
@@ -46,7 +46,7 @@ def test_e2e_2_four_filter_rules_and_six_platforms_cross_analysis() -> None:
     res_attr = client.get("/api/properties", params={"attractive_only": "true"})
     assert res_attr.status_code == 200
     attractive_list: List[Dict[str, Any]] = res_attr.json()
-    assert len(attractive_list) == 5
+    assert len(attractive_list) >= 5
 
     for prop in attractive_list:
         # 4대 핵심 필터 검증

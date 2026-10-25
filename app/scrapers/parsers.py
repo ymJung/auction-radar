@@ -319,3 +319,19 @@ class NaverLandScraper:
             asking_jeonse_avg=jeonse_avg,
             active_listing_count=len(sale_prices) + len(jeonse_prices),
         )
+
+
+def normalize_case_no(raw_text: str) -> str:
+    """
+    '2025타경 2768', '2025 타경 2768', '2025타경2768[1]', '2025-2768' 등 다양한 사건번호 입력을
+    표준 포맷 'YYYY타경NNNN'으로 정규화합니다.
+    """
+    cleaned = raw_text.strip()
+    m = re.search(r"(20\d{2})\s*타\s*경\s*0*(\d+)", cleaned)
+    if m:
+        return f"{m.group(1)}타경{m.group(2)}"
+    m2 = re.search(r"^(20\d{2})\s*[-_]\s*0*(\d+)$", cleaned)
+    if m2:
+        return f"{m2.group(1)}타경{m2.group(2)}"
+    return re.sub(r"\s+", "", cleaned)
+

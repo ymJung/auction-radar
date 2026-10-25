@@ -26,6 +26,10 @@
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2.5">
+        <button onclick="openBulkAiModal(true)" id="btn-bulk-ai"
+          class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition flex items-center gap-1.5">
+          <span>🤖</span> <span>매력 매물 전체 AI 토론용 텍스트 추출</span>
+        </button>
         <button onclick="runScrapePipeline()" id="btn-scrape"
           class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm font-medium text-slate-200 transition flex items-center gap-1.5">
           <span>🔄</span> <span>6대 사이트 스크래핑 & 재분석</span>
@@ -69,6 +73,102 @@
         <p class="text-2xl font-bold text-purple-400 mt-1">{{ stats.avg_market_ratio }}<span class="text-sm font-normal text-slate-400 ml-0.5">%</span></p>
         <p class="text-[11px] text-slate-400 mt-1">실거래 대비 낙찰가율 (감정가 대비 {{ stats.avg_appraisal_ratio }}%)</p>
       </div>
+    </section>
+
+    <!-- 🔎 경매 사건번호 직접 분석 실행기 (사건번호 입력 → 전체 파이프라인 분석 & AI 토론 텍스트 추출) -->
+    <section class="rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/35 to-slate-900 border border-indigo-500/40 p-5 md:p-6 space-y-4 shadow-xl">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+              ⚡ On-Demand Case Pipeline
+            </span>
+            <h2 class="text-base md:text-lg font-extrabold text-white">
+              🔎 경매 사건번호 맞춤 정밀 분석 실행기
+            </h2>
+          </div>
+          <p class="text-xs text-slate-300">
+            원하는 <strong>경매 사건번호(예: 2025타경 2768)</strong>를 입력하면, <strong>① 권리·점유·미납관리비 파싱 → ② 6대 부동산 플랫폼 교차시세 → ③ 4대 핵심 필터 & 매력도 점수 → ④ 3단계 추천 입찰가 → ⑤ 제미나이(AI) 토론용 상세 텍스트</strong>까지 전체 분석 과정을 즉시 실행합니다.
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5 text-xs">
+          <span class="text-slate-400 mr-1">빠른 예시:</span>
+          <button onclick="fillSampleCase('2025타경 2768')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-300 font-semibold transition">
+            2025타경 2768 (관악푸르지오)
+          </button>
+          <button onclick="fillSampleCase('2026타경 104821')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-300 font-medium transition">
+            2026타경 104821 (공덕래미안)
+          </button>
+          <button onclick="fillSampleCase('2025타경 101204')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-purple-300 font-medium transition">
+            2025타경 101204 (과거낙찰건)
+          </button>
+        </div>
+      </div>
+
+      <!-- 사건번호 입력 & 실행 바 -->
+      <div class="flex flex-col md:flex-row items-stretch md:items-center gap-2.5">
+        <div class="relative flex-1">
+          <input id="analyze-case-input" type="text"
+            onkeydown="if(event.key==='Enter') runCaseAnalysis(false)"
+            placeholder="경매 사건번호 입력 (예: 2025타경 2768, 2026타경104821, 2026타경55102)"
+            class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-indigo-500/50 text-sm md:text-base font-bold text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400" />
+        </div>
+        <button onclick="toggleCaseOverrideForm()" type="button"
+          class="px-3.5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 transition flex items-center justify-center gap-1.5 shrink-0">
+          <span>⚙️</span> <span id="btn-override-label">매물 상세정보 직접 지정/보정 (선택)</span>
+        </button>
+        <label class="px-3 py-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 flex items-center gap-2 cursor-pointer shrink-0">
+          <input id="analyze-send-tg" type="checkbox" class="rounded bg-slate-900 border-slate-700 text-sky-500 focus:ring-0" />
+          <span>✈️ 텔레그램 동시 발송</span>
+        </label>
+        <button onclick="runCaseAnalysis(false)" id="btn-run-case-analyze"
+          class="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/25 transition flex items-center justify-center gap-1.5 shrink-0">
+          <span>🚀</span> <span>사건번호 정밀 분석 실행</span>
+        </button>
+        <button onclick="runCaseAnalysis(true)" id="btn-run-case-ai"
+          class="px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 transition flex items-center justify-center gap-1.5 shrink-0">
+          <span>🤖</span> <span>분석 후 AI 토론 텍스트 바로 열기</span>
+        </button>
+      </div>
+
+      <!-- 선택적 매물 상세 조건 직접 지정/보정 폼 -->
+      <div id="case-override-form" class="hidden rounded-xl bg-slate-950/90 border border-slate-800 p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <p class="text-xs font-bold text-indigo-300">
+            ⚙️ 알고 있는 매물 기본정보가 있다면 함께 입력해주세요 (비워두면 사건번호 기반으로 자동 수집·추정하여 분석합니다)
+          </p>
+          <button onclick="clearCaseOverrides()" type="button" class="text-[11px] text-slate-400 hover:text-white underline">
+            입력값 초기화
+          </button>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-2.5 text-xs">
+          <input id="ov-court" type="text" placeholder="관할법원 (예: 서울중앙지방법원)" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white" />
+          <input id="ov-address" type="text" placeholder="소재지 주소 (예: 서울 관악구 봉천동 1717)" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white md:col-span-2" />
+          <select id="ov-type" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white">
+            <option value="">물건종류 (자동판별)</option>
+            <option value="아파트">아파트</option>
+            <option value="다세대(빌라)">다세대(빌라)</option>
+            <option value="오피스텔">오피스텔</option>
+          </select>
+          <input id="ov-area" type="number" step="0.1" placeholder="전용면적 ㎡ (예: 84.2)" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white" />
+          <input id="ov-appraisal" type="number" placeholder="감정가(만원, 예: 99400)" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white" />
+          <input id="ov-minbid" type="number" placeholder="최저매각가(만원, 예: 79520)" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white" />
+          <input id="ov-mgmt" type="number" placeholder="미납관리비(만원, 예: 70)" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white" />
+          <select id="ov-occupant" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white">
+            <option value="">점유관계 (자동판별)</option>
+            <option value="소유자">소유자 직접 거주 (임차인 없음)</option>
+            <option value="임차인">임차인 거주 중</option>
+          </select>
+          <select id="ov-defect" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white">
+            <option value="">권리하자 유무 (자동판별)</option>
+            <option value="clean">권리상 하자 없음 (인수 0원)</option>
+            <option value="defect">선순위 인수 하자 있음</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 실시간 사건번호 분석 파이프라인 결과 표시 영역 -->
+      <div id="case-analysis-result-panel" class="hidden pt-3 border-t border-indigo-500/30 space-y-4"></div>
     </section>
 
     <!-- 필터 탭 -->
@@ -148,19 +248,32 @@
             </p>
           </div>
 
-          <!-- 감정가 / 최저매각가 / 적정추천입찰가 요약 -->
-          <div class="grid grid-cols-3 gap-3 bg-slate-950/80 rounded-xl p-3 border border-slate-800 min-w-[320px]">
-            <div>
-              <p class="text-[11px] text-slate-400">법원 감정가</p>
-              <p class="text-sm font-semibold text-slate-200">{{ p.appraisal_price | eok_man }}</p>
+          <!-- 감정가 / 최저매각가 / 적정추천입찰가 요약 + AI 토론 텍스트 추출 버튼 -->
+          <div class="flex flex-col gap-2 min-w-[320px]">
+            <div class="grid grid-cols-3 gap-3 bg-slate-950/80 rounded-xl p-3 border border-slate-800">
+              <div>
+                <p class="text-[11px] text-slate-400">법원 감정가</p>
+                <p class="text-sm font-semibold text-slate-200">{{ p.appraisal_price | eok_man }}</p>
+              </div>
+              <div>
+                <p class="text-[11px] text-slate-400">최저매각가격</p>
+                <p class="text-sm font-bold text-amber-400">{{ p.min_bid_price | eok_man }}</p>
+              </div>
+              <div>
+                <p class="text-[11px] text-emerald-300 font-semibold">🎯 추천 입찰가(적정)</p>
+                <p class="text-base font-extrabold text-emerald-400">{{ p.recommendation.optimal_bid | eok_man }}</p>
+              </div>
             </div>
-            <div>
-              <p class="text-[11px] text-slate-400">최저매각가격</p>
-              <p class="text-sm font-bold text-amber-400">{{ p.min_bid_price | eok_man }}</p>
-            </div>
-            <div>
-              <p class="text-[11px] text-emerald-300 font-semibold">🎯 추천 입찰가(적정)</p>
-              <p class="text-base font-extrabold text-emerald-400">{{ p.recommendation.optimal_bid | eok_man }}</p>
+            <div class="flex items-center gap-2">
+              <button onclick="openPropertyAiModal('{{ p.case_no }}')"
+                class="flex-1 px-3 py-2 rounded-xl bg-indigo-600/90 hover:bg-indigo-500 border border-indigo-400/30 text-xs font-bold text-white shadow-md shadow-indigo-950/50 transition flex items-center justify-center gap-1.5">
+                <span>🤖</span> <span>AI 토론용 상세 텍스트 추출 (제미나이·GPT)</span>
+              </button>
+              <button onclick="quickCopyAndOpenGemini('{{ p.case_no }}')"
+                title="이 매물 상세 텍스트를 즉시 클립보드에 복사하고 제미나이(Gemini) 새 창을 엽니다"
+                class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-indigo-500/40 text-xs font-semibold text-indigo-300 transition flex items-center gap-1 shrink-0">
+                <span>✨</span> <span>복사 후 Gemini 열기</span>
+              </button>
             </div>
           </div>
         </div>
@@ -371,66 +484,180 @@
       {% endfor %}
     </section>
 
-    <!-- 낙찰 결과 추적 DB & 신규 낙찰 결과 등록 섹션 -->
+    <!-- 낙찰 결과 추적 DB & 과거 낙찰 시뮬레이션(제시 낙찰가 · 이득 · 2등 격차) 섹션 -->
     <section id="history-section" class="rounded-2xl bg-slate-900 border border-slate-800 p-6 space-y-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <div>
           <h2 class="text-lg font-bold text-white flex items-center gap-2">
             <span>📊</span>
-            <span>유사 조건(임차인無·소유자거주·무하자) 실제 낙찰 결과 추적 DB</span>
+            <span>과거 낙찰 데이터 기준: 제시된 낙찰가 · 예상 이득(순수익) · 2등과의 격차 시뮬레이션</span>
           </h2>
           <p class="text-xs text-slate-400 mt-0.5">
-            과거 및 최근 경매 물건이 실제로 얼마에 낙찰되었는지 추적하여, 앞으로 나오는 신규 매물의 입찰가 추천 모델에 실시간 반영합니다.
+            이미 낙찰된 과거 매물에 대해 당시 시스템이 제시한 추천 입찰가를 보여주고, 만약 그 가격에 낙찰되었다면 얼마나 이득(순수익)이었는지, 그리고 실제 2등(차순위)과는 얼마나 차이가 있었는지 시뮬레이션합니다.
           </p>
         </div>
       </div>
 
-      <!-- 낙찰 히스토리 테이블 -->
+      <!-- 과거 데이터 백테스팅 시뮬레이션 핵심 요약 카드 4종 -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div class="rounded-xl bg-emerald-950/30 border border-emerald-500/40 p-4">
+          <p class="text-xs text-emerald-300 font-semibold">💰 제시 적정가 낙찰 시 평균 이득(순수익)</p>
+          <p class="text-xl font-extrabold text-emerald-400 mt-1">+{{ stats.avg_suggested_profit | eok_man }}</p>
+          <p class="text-[11px] text-slate-400 mt-1">공용 미납관리비 · 명도비 · 취득세 모두 차감 후</p>
+        </div>
+        <div class="rounded-xl bg-slate-950 border border-slate-800 p-4">
+          <p class="text-xs text-sky-300 font-semibold">🏆 실제 1등 낙찰자 평균 이득(순수익)</p>
+          <p class="text-xl font-bold text-sky-400 mt-1">+{{ stats.avg_actual_profit | eok_man }}</p>
+          <p class="text-[11px] text-slate-400 mt-1">실제 낙찰가 기준 모든 부대비용 차감 후 순익</p>
+        </div>
+        <div class="rounded-xl bg-amber-950/25 border border-amber-500/40 p-4">
+          <p class="text-xs text-amber-300 font-semibold">🥈 실제 1등 vs 2등(차순위) 평균 격차</p>
+          <p class="text-xl font-extrabold text-amber-400 mt-1">+{{ stats.avg_gap_1st_2nd | eok_man }}</p>
+          <p class="text-[11px] text-slate-400 mt-1">1등 낙찰자가 2등보다 평균 더 쓴 금액</p>
+        </div>
+        <div class="rounded-xl bg-purple-950/30 border border-purple-500/40 p-4">
+          <p class="text-xs text-purple-300 font-semibold">🎯 제시 입찰가 시뮬레이션 적중률</p>
+          <p class="text-xl font-extrabold text-purple-300 mt-1">
+            2등 제침 {{ stats.beat_2nd_count }}/{{ stats.history_count }}건
+          </p>
+          <p class="text-[11px] text-slate-400 mt-1">
+            적정가 1등 {{ stats.won_1st_opt_count }}건 · 공격형 제시가 1등 {{ stats.won_1st_agg_count }}/{{ stats.history_count }}건
+          </p>
+        </div>
+      </div>
+
+      <!-- 낙찰 히스토리 & 시뮬레이션 비교 테이블 -->
       <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse text-xs">
           <thead>
-            <tr class="border-b border-slate-800 text-slate-400 bg-slate-950/60">
-              <th class="py-2.5 px-3">매각일자</th>
-              <th class="py-2.5 px-3">사건번호 / 지역</th>
-              <th class="py-2.5 px-3">유형 / 연식</th>
-              <th class="py-2.5 px-3">아실 재개발</th>
-              <th class="py-2.5 px-3">감정가 / 최저가</th>
-              <th class="py-2.5 px-3">당시 실거래시세</th>
-              <th class="py-2.5 px-3 text-emerald-300">실제 낙찰가</th>
-              <th class="py-2.5 px-3">낙찰가율 (감정/시세)</th>
-              <th class="py-2.5 px-3">응찰자</th>
+            <tr class="border-b border-slate-800 text-slate-400 bg-slate-950/80">
+              <th class="py-3 px-3">매각일자 / 사건번호</th>
+              <th class="py-3 px-3">감정가 / 당시시세</th>
+              <th class="py-3 px-3 text-emerald-300">🎯 제시된 입찰가 (추천)</th>
+              <th class="py-3 px-3 text-sky-300">🏆 실제 1등 / 🥈 2등 입찰가</th>
+              <th class="py-3 px-3 text-amber-300">📏 2등과의 차이 (격차)</th>
+              <th class="py-3 px-3 text-emerald-300">💰 낙찰 시 얼마나 이득? (순수익)</th>
+              <th class="py-3 px-3">시뮬레이션 판정 & 직접 계산</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-800/70">
             {% for h in history %}
-            <tr class="hover:bg-slate-800/40">
-              <td class="py-2.5 px-3 text-slate-400">{{ h.sold_date }}</td>
-              <td class="py-2.5 px-3">
-                <div class="font-semibold text-slate-200">{{ h.case_no }}</div>
-                <div class="text-slate-400">{{ h.region_name }} ({{ h.exclusive_area_m2 }}㎡)</div>
+            <tr class="hover:bg-slate-800/30 align-top">
+              <td class="py-3.5 px-3">
+                <div class="text-[11px] text-slate-400">{{ h.sold_date }} · 응찰 {{ h.bidders_count }}명</div>
+                <div class="font-bold text-white mt-0.5">{{ h.case_no }}</div>
+                <div class="text-slate-300">{{ h.region_name }}</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">
+                  {{ h.property_type }} · {{ h.exclusive_area_m2 }}㎡ · {{ h.building_age_years }}년차
+                  {% if h.is_redev_zone %}
+                  <span class="ml-1 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold">재개발</span>
+                  {% endif %}
+                </div>
               </td>
-              <td class="py-2.5 px-3">
-                <span>{{ h.property_type }}</span>
-                <span class="text-slate-400 block">{{ h.building_age_years }}년차</span>
+
+              <td class="py-3.5 px-3">
+                <div class="text-slate-300">감정: <strong class="text-white">{{ h.appraisal_price | eok_man }}</strong></div>
+                <div class="text-slate-400">최저: {{ h.min_bid_price | eok_man }}</div>
+                <div class="text-sky-300 font-semibold mt-1">당시시세: {{ h.market_value_at_bid | eok_man }}</div>
+                <div class="text-[11px] text-slate-500">
+                  차감비용(관리비·명도·세금): -{{ (h.assumed_unpaid_mgmt_fee + h.estimated_eviction_and_tax) | eok_man }}
+                </div>
               </td>
-              <td class="py-2.5 px-3">
-                {% if h.is_redev_zone %}
-                <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold">재개발포함</span>
-                {% else %}
-                <span class="text-slate-500">일반</span>
-                {% endif %}
+
+              <!-- 제시된 입찰가 -->
+              <td class="py-3.5 px-3 bg-emerald-950/15">
+                <div class="text-[11px] text-emerald-300 font-semibold">⭐ 제시 적정 입찰가</div>
+                <div class="text-sm font-extrabold text-emerald-400">{{ h.suggested_optimal_bid | eok_man }}</div>
+                <div class="text-[11px] text-slate-400">
+                  감정 {{ h.suggested_optimal_ratio_appraisal }}% · 시세 {{ h.suggested_optimal_ratio_market }}%
+                </div>
+                <div class="text-[11px] text-slate-400 mt-1">
+                  보수: {{ h.suggested_conservative_bid | eok_man }}<br/>
+                  공격: <span class="text-amber-300 font-medium">{{ h.suggested_aggressive_bid | eok_man }}</span>
+                </div>
               </td>
-              <td class="py-2.5 px-3">
-                <div>{{ h.appraisal_price | eok_man }}</div>
-                <div class="text-slate-400">최저 {{ h.min_bid_price | eok_man }}</div>
+
+              <!-- 실제 1등 낙찰가 & 2등 차순위 입찰가 -->
+              <td class="py-3.5 px-3">
+                <div>
+                  <span class="text-[11px] text-sky-300 font-semibold">🏆 실제 1등 낙찰가:</span>
+                  <div class="text-sm font-bold text-white">{{ h.winning_bid_price | eok_man }}</div>
+                  <div class="text-[11px] text-slate-400">감정 {{ h.winning_bid_ratio_appraisal }}% · 시세 {{ h.winning_bid_ratio_market }}%</div>
+                </div>
+                <div class="mt-1.5 pt-1.5 border-t border-slate-800/80">
+                  <span class="text-[11px] text-amber-300 font-semibold">🥈 실제 2등(차순위)가:</span>
+                  <div class="text-xs font-bold text-amber-200">{{ h.second_bid_price | eok_man }}</div>
+                </div>
               </td>
-              <td class="py-2.5 px-3 text-slate-300">{{ h.market_value_at_bid | eok_man }}</td>
-              <td class="py-2.5 px-3 font-bold text-emerald-400">{{ h.winning_bid_price | eok_man }}</td>
-              <td class="py-2.5 px-3">
-                <span class="font-semibold text-white">감정 {{ h.winning_bid_ratio_appraisal }}%</span>
-                <span class="block text-purple-300">시세 {{ h.winning_bid_ratio_market }}%</span>
+
+              <!-- 2등과의 차이 -->
+              <td class="py-3.5 px-3">
+                <div class="rounded-lg bg-amber-950/20 border border-amber-500/30 p-2 space-y-1">
+                  <div class="text-[11px] text-slate-300">
+                    <span class="text-amber-300 font-semibold">1등 vs 2등 차이:</span><br/>
+                    <strong class="text-amber-400 text-xs">+{{ h.gap_1st_to_2nd_price | eok_man }}</strong>
+                    <span class="text-[10px] text-slate-400">(감정 {{ h.gap_1st_to_2nd_ratio }}%p)</span>
+                  </div>
+                  <div class="text-[11px] text-slate-300 pt-1 border-t border-slate-800">
+                    <span class="text-slate-400">제시 적정가 vs 2등:</span><br/>
+                    {% if h.gap_suggested_to_2nd >= 0 %}
+                    <strong class="text-emerald-400">+{{ h.gap_suggested_to_2nd | eok_man }} (2등 제침✔)</strong>
+                    {% else %}
+                    <strong class="text-rose-400">-{{ (h.gap_suggested_to_2nd * -1) | eok_man }} (2등보다 낮음)</strong>
+                    {% endif %}
+                  </div>
+                  <div class="text-[11px] text-slate-400">
+                    제시 적정가 vs 1등:
+                    {% if h.gap_suggested_to_1st >= 0 %}
+                    <span class="text-emerald-300 font-semibold">+{{ h.gap_suggested_to_1st | eok_man }}</span>
+                    {% else %}
+                    <span class="text-slate-300">-{{ (h.gap_suggested_to_1st * -1) | eok_man }}</span>
+                    {% endif %}
+                  </div>
+                </div>
               </td>
-              <td class="py-2.5 px-3 font-semibold text-amber-300">{{ h.bidders_count }}명</td>
+
+              <!-- 만약 낙찰되었다면 얼마나 이득이었나? -->
+              <td class="py-3.5 px-3 bg-emerald-950/10">
+                <div class="space-y-1.5">
+                  <div>
+                    <span class="text-[11px] text-emerald-300 font-semibold">제시 적정가 낙찰 시 이득:</span>
+                    <div class="text-sm font-extrabold text-emerald-400">+{{ h.suggested_optimal_net_profit | eok_man }}</div>
+                  </div>
+                  <div class="pt-1 border-t border-slate-800/80">
+                    <span class="text-[11px] text-slate-400">실제 1등 낙찰자 이득:</span>
+                    <div class="text-xs font-bold text-sky-300">+{{ h.actual_winner_net_profit | eok_man }}</div>
+                  </div>
+                  <div class="text-[11px] text-slate-400">
+                    {% if h.profit_diff_vs_actual >= 0 %}
+                    👉 제시가 낙찰 시 1등보다 <strong class="text-emerald-300">+{{ h.profit_diff_vs_actual | eok_man }}</strong> 더 이득
+                    {% else %}
+                    👉 제시가가 1등보다 <strong class="text-amber-300">{{ (h.profit_diff_vs_actual * -1) | eok_man }}</strong> 높게 공격 입찰
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+
+              <!-- 시뮬레이션 판정 & 개별 입찰가 시뮬레이터 -->
+              <td class="py-3.5 px-3 min-w-[250px] space-y-2">
+                <div class="inline-block px-2 py-0.5 rounded text-[11px] font-bold {% if h.would_win_with_optimal %}bg-emerald-500/20 text-emerald-300 border border-emerald-500/40{% elif h.would_beat_2nd_with_optimal %}bg-sky-500/20 text-sky-300 border border-sky-500/40{% else %}bg-amber-500/20 text-amber-300 border border-amber-500/40{% endif %}">
+                  {{ h.simulation_badge }}
+                </div>
+                <p class="text-[11px] text-slate-300 leading-relaxed">{{ h.simulation_verdict }}</p>
+
+                <!-- 과거 매물 직접 금액 시뮬레이션 -->
+                <div class="pt-1.5 border-t border-slate-800 flex items-center gap-1.5">
+                  <input type="number" id="hist-sim-input-{{ h.case_no }}"
+                    value="{{ (h.suggested_optimal_bid // 10000) }}"
+                    class="w-24 px-2 py-1 rounded bg-slate-950 border border-slate-700 text-xs text-white" />
+                  <span class="text-[11px] text-slate-400">만원</span>
+                  <button onclick="simulateHistoryBid('{{ h.case_no }}')"
+                    class="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-[11px] font-semibold text-white transition">
+                    시뮬레이션
+                  </button>
+                </div>
+                <div id="hist-sim-result-{{ h.case_no }}" class="text-[11px] text-emerald-300 font-medium"></div>
+              </td>
             </tr>
             {% endfor %}
           </tbody>
@@ -439,8 +666,8 @@
 
       <!-- 신규 낙찰 결과 추적 등록 폼 -->
       <div class="rounded-xl bg-slate-950 border border-slate-800 p-4 space-y-3">
-        <h3 class="text-sm font-bold text-purple-300">➕ 새로운 낙찰 결과 기록하기 (기록 시 추천 입찰가 자동 재학습)</h3>
-        <div class="grid grid-cols-2 md:grid-cols-6 gap-2.5 text-xs">
+        <h3 class="text-sm font-bold text-purple-300">➕ 새로운 낙찰 결과 기록하기 (기록 시 제시 입찰가·이득·2등 격차 자동 시뮬레이션)</h3>
+        <div class="grid grid-cols-2 md:grid-cols-7 gap-2.5 text-xs">
           <input id="rec-case" type="text" placeholder="사건번호 (예: 2026타경55102)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white" />
           <input id="rec-region" type="text" placeholder="지역 (예: 서울 성동구 행당동)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white" />
           <select id="rec-type" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white">
@@ -450,14 +677,209 @@
           </select>
           <input id="rec-appraisal" type="number" placeholder="감정가(만원, 예: 60000)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white" />
           <input id="rec-market" type="number" placeholder="시세(만원, 예: 58000)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white" />
-          <input id="rec-winning" type="number" placeholder="실제낙찰가(만원, 예: 51000)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white" />
+          <input id="rec-winning" type="number" placeholder="1등 낙찰가(만원, 예: 51000)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white" />
+          <input id="rec-second" type="number" placeholder="2등 입찰가(만원, 선택)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white" />
         </div>
         <button onclick="recordWinningBid()" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-xs font-semibold text-white transition">
-          📥 낙찰 결과 저장 및 입찰 추천모델 업데이트
+          📥 낙찰 결과 저장 및 시뮬레이션 업데이트
         </button>
       </div>
     </section>
   </main>
+
+  <!-- 🤖 생성형 AI (제미나이 / ChatGPT / Claude) 토론용 상세 텍스트 추출 모달 -->
+  <div id="ai-text-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-indigo-500/40 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- 모달 헤더 -->
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+              🤖 Generative AI Discussion Prompt
+            </span>
+            <h3 id="ai-modal-title" class="text-base md:text-lg font-extrabold text-white">
+              매물 상세 텍스트 추출 (제미나이 · ChatGPT 토론용)
+            </h3>
+          </div>
+          <p id="ai-modal-subtitle" class="text-xs text-slate-400 mt-1">
+            권리관계 · 점유 · 미납관리비 · 6대 부동산 플랫폼 실거래/호가 · 3단계 추천 입찰가 및 산정 근거를 구조화된 텍스트로 추출했습니다.
+          </p>
+        </div>
+        <button onclick="closeAiModal()" class="text-slate-400 hover:text-white text-xl font-bold px-2.5 py-1 rounded-lg hover:bg-slate-800 transition">
+          ✕
+        </button>
+      </div>
+
+      <!-- 모달 컨트롤 바 (포맷 전환 & 자금 유동성 전략 선택 & 내 추가 질문 입력) -->
+      <div class="px-6 py-3 bg-slate-900/90 border-b border-slate-800 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-semibold text-slate-400">추출 형식:</span>
+            <button onclick="switchAiModalMode(true)" id="ai-mode-prompt"
+              class="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white transition">
+              🤖 AI 심층 토론 프롬프트 + 질문 포함 (추천)
+            </button>
+            <button onclick="switchAiModalMode(false)" id="ai-mode-raw"
+              class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+              📄 순수 매물 상세 데이터만
+            </button>
+          </div>
+          <div id="ai-char-stats" class="text-[11px] text-slate-400 font-mono">
+            0자 / 0줄
+          </div>
+        </div>
+
+        <!-- 💰 자금 유동성 확인 및 가용 대출·레버리지 전략 선택 패널 -->
+        <div class="rounded-xl bg-slate-950/90 border border-emerald-500/30 p-3 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-extrabold text-emerald-300">
+                💰 자금 유동성 & 가용 수단 전략 선택 (복수 선택 가능 · 제미나이 상담 export에 즉시 반영)
+              </span>
+            </div>
+            <div class="flex flex-wrap items-center gap-1 text-[11px]">
+              <button type="button" onclick="applyStrategyPreset(['newborn_special','first_time_buyer','auction_balance_loan','jeonse_126_leverage','policy_mortgage','short_term_flipping'])"
+                class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 font-semibold transition">
+                전체 수단 선택
+              </button>
+              <button type="button" onclick="applyStrategyPreset(['newborn_special','first_time_buyer','auction_balance_loan','policy_mortgage'])"
+                class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 transition">
+                정책·실거주 위주
+              </button>
+              <button type="button" onclick="applyStrategyPreset(['auction_balance_loan','jeonse_126_leverage','short_term_flipping'])"
+                class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition">
+                경락·전세레버리지 위주
+              </button>
+              <button type="button" onclick="applyStrategyPreset([])"
+                class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800 transition">
+                선택 해제
+              </button>
+            </div>
+          </div>
+
+          <!-- 전략 토글 칩 6종 -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs" id="ai-strategy-chips">
+            <button type="button" onclick="toggleFundingStrategy('newborn_special')" id="strat-btn-newborn_special"
+              data-strat="newborn_special"
+              class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
+              <span>👶 신생아 특례 대출</span>
+              <span class="strat-check text-[10px]">✔</span>
+            </button>
+            <button type="button" onclick="toggleFundingStrategy('first_time_buyer')" id="strat-btn-first_time_buyer"
+              data-strat="first_time_buyer"
+              class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
+              <span>🏡 생애최초 대출 (LTV 80%)</span>
+              <span class="strat-check text-[10px]">✔</span>
+            </button>
+            <button type="button" onclick="toggleFundingStrategy('auction_balance_loan')" id="strat-btn-auction_balance_loan"
+              data-strat="auction_balance_loan"
+              class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
+              <span>⚖️ 경매 경락잔금대출</span>
+              <span class="strat-check text-[10px]">✔</span>
+            </button>
+            <button type="button" onclick="toggleFundingStrategy('jeonse_126_leverage')" id="strat-btn-jeonse_126_leverage"
+              data-strat="jeonse_126_leverage"
+              class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
+              <span>💎 전세보증보험(126%) 세팅</span>
+              <span class="strat-check text-[10px]">✔</span>
+            </button>
+            <button type="button" onclick="toggleFundingStrategy('policy_mortgage')" id="strat-btn-policy_mortgage"
+              data-strat="policy_mortgage"
+              class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
+              <span>🏛️ 보금자리론·디딤돌</span>
+              <span class="strat-check text-[10px]">✔</span>
+            </button>
+            <button type="button" onclick="toggleFundingStrategy('short_term_flipping')" id="strat-btn-short_term_flipping"
+              data-strat="short_term_flipping"
+              class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
+              <span>🔄 단기 매도(플리핑)·사업자</span>
+              <span class="strat-check text-[10px]">✔</span>
+            </button>
+          </div>
+
+          <!-- 내 가용 현금(자기자본) 입력 및 빠른 선택 -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80 text-xs">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <label for="ai-available-cash" class="text-slate-300 font-semibold">
+                💵 내 보유 가용 현금(유동성 기준):
+              </label>
+              <input id="ai-available-cash" type="number" step="1000" min="0"
+                onchange="onAvailableCashChanged()"
+                onkeydown="if(event.key==='Enter') onAvailableCashChanged()"
+                placeholder="미입력 시 필요자본만 산출"
+                class="w-36 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white font-bold focus:outline-none focus:border-emerald-500" />
+              <span class="text-slate-400">만원</span>
+              <button type="button" onclick="onAvailableCashChanged()"
+                class="px-2 py-1 rounded bg-emerald-600/80 hover:bg-emerald-500 text-white font-bold text-[11px] transition">
+                유동성 반영
+              </button>
+            </div>
+            <div class="flex flex-wrap items-center gap-1 text-[11px]">
+              <span class="text-slate-500">빠른입력:</span>
+              <button type="button" onclick="setQuickAvailableCash(5000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">5천만</button>
+              <button type="button" onclick="setQuickAvailableCash(10000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">1억</button>
+              <button type="button" onclick="setQuickAvailableCash(15000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">1.5억</button>
+              <button type="button" onclick="setQuickAvailableCash(20000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">2억</button>
+              <button type="button" onclick="setQuickAvailableCash(30000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">3억</button>
+              <button type="button" onclick="setQuickAvailableCash(0)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-rose-300 border border-slate-800">초기화</button>
+            </div>
+          </div>
+
+          <!-- 실시간 전략별 유동성 요약 배지 표시줄 -->
+          <div id="ai-liquidity-summary-bar" class="hidden pt-1.5 border-t border-slate-800/80 text-[11px] text-slate-300 space-y-1"></div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+          <label for="ai-custom-question" class="text-xs font-semibold text-indigo-300 shrink-0">
+            💬 제미나이에게 추가로 물어볼 내 고민/조건:
+          </label>
+          <input id="ai-custom-question" type="text"
+            oninput="updateAiModalTextWithCustomQuestion()"
+            placeholder="예: 신생아특례 대환 전 브릿지로 쓸 경락잔금대출 중도상환수수료 면제 조건과 명도 일정을 함께 봐줘"
+            class="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500" />
+        </div>
+      </div>
+
+      <!-- 추출된 텍스트 본문 영역 -->
+      <div class="p-6 flex-1 overflow-y-auto bg-slate-950/50">
+        <textarea id="ai-modal-textarea" rows="16"
+          class="w-full h-full min-h-[320px] p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs md:text-sm text-slate-200 font-mono leading-relaxed focus:outline-none focus:border-indigo-500 resize-y"
+          readonly></textarea>
+      </div>
+
+      <!-- 모달 하단 액션 버튼 (복사 / 제미나이 열기 / 파일 저장) -->
+      <div class="px-6 py-4 border-t border-slate-800 bg-slate-950/80 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="copyAiModalText()" id="btn-copy-ai-text"
+            class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs md:text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition flex items-center gap-1.5">
+            <span>📋</span> <span>전체 텍스트 클립보드 복사</span>
+          </button>
+          <button onclick="copyAndLaunchExternalAi('https://gemini.google.com/app', 'Gemini')"
+            class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs md:text-sm font-bold text-white shadow-lg shadow-indigo-600/20 transition flex items-center gap-1.5">
+            <span>✨</span> <span>복사 후 제미나이(Gemini) 열기 ↗</span>
+          </button>
+          <button onclick="copyAndLaunchExternalAi('https://chatgpt.com/', 'ChatGPT')"
+            class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition flex items-center gap-1.5">
+            <span>💬</span> <span>복사 후 ChatGPT 열기 ↗</span>
+          </button>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="downloadAiModalText('txt')"
+            class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-300 transition">
+            💾 .txt 다운로드
+          </button>
+          <button onclick="downloadAiModalText('md')"
+            class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-300 transition">
+            📝 .md 다운로드
+          </button>
+          <button onclick="closeAiModal()"
+            class="px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-400 transition">
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script>
     function showToast(msg, isError = false) {
@@ -547,6 +969,32 @@
       outEl.innerHTML = `👉 예상 낙찰확률 <strong>${data.estimated_win_probability}%</strong> (감정가 대비 ${data.ratio_to_appraisal}%) | 순안전마진 <strong>${profitMan}만원</strong> | 보증보험(126%) 전세 활용 시 실투입금 <strong>${capMan}만원</strong> (${data.verdict})`;
     }
 
+    async function simulateHistoryBid(caseNo) {
+      const inputEl = document.getElementById('hist-sim-input-' + caseNo);
+      const outEl = document.getElementById('hist-sim-result-' + caseNo);
+      const manwon = parseInt(inputEl.value || '0', 10);
+      if (!manwon || manwon <= 0) return;
+
+      const res = await fetch('/api/history/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ case_no: caseNo, bid_amount: manwon * 10000 })
+      });
+      const data = await res.json();
+      const profitMan = Math.round(data.simulated_net_profit / 10000).toLocaleString();
+      const gap2ndMan = Math.round(data.gap_vs_2nd / 10000);
+      const gap1stMan = Math.round(data.gap_vs_1st / 10000);
+      const sign2nd = gap2ndMan >= 0 ? '+' : '';
+      const sign1st = gap1stMan >= 0 ? '+' : '';
+      outEl.innerHTML = `
+        <div class="mt-1 p-2 rounded bg-slate-950 border border-emerald-500/40 space-y-0.5">
+          <div class="font-bold text-white">${data.rank_label}</div>
+          <div>💰 낙찰 가정 시 순수익(이득): <strong class="text-emerald-400">+${profitMan}만원</strong></div>
+          <div>📏 2등과의 차이: <strong class="text-amber-300">${sign2nd}${gap2ndMan.toLocaleString()}만원</strong> | 1등과의 차이: <strong>${sign1st}${gap1stMan.toLocaleString()}만원</strong></div>
+        </div>
+      `;
+    }
+
     async function recordWinningBid() {
       const caseNo = document.getElementById('rec-case').value.trim();
       const region = document.getElementById('rec-region').value.trim();
@@ -554,9 +1002,10 @@
       const appraisal = parseInt(document.getElementById('rec-appraisal').value || '0', 10) * 10000;
       const market = parseInt(document.getElementById('rec-market').value || '0', 10) * 10000;
       const winning = parseInt(document.getElementById('rec-winning').value || '0', 10) * 10000;
+      const secondBid = parseInt(document.getElementById('rec-second').value || '0', 10) * 10000;
 
       if (!caseNo || !region || !appraisal || !market || !winning) {
-        showToast('모든 항목(사건번호, 지역, 감정가, 시세, 실제낙찰가)을 입력해주세요.', true);
+        showToast('필수 항목(사건번호, 지역, 감정가, 시세, 1등 실제낙찰가)을 입력해주세요.', true);
         return;
       }
 
@@ -571,14 +1020,581 @@
           min_bid_price: Math.round(appraisal * 0.8),
           market_value_at_bid: market,
           official_price: Math.round(market * 0.7),
-          winning_bid_price: winning
+          winning_bid_price: winning,
+          second_bid_price: secondBid
         })
       });
       const data = await res.json();
       if (data.ok) {
-        showToast(`✅ [${caseNo}] 낙찰가율(시세대비 ${data.winning_bid_ratio_market}%) 기록 및 전체 매물 입찰 추천가 재산출 완료!`);
-        setTimeout(() => location.reload(), 1000);
+        const suggMan = Math.round((data.suggested_optimal_bid || 0) / 10000).toLocaleString();
+        const profMan = Math.round((data.suggested_optimal_net_profit || 0) / 10000).toLocaleString();
+        const gapMan = Math.round((data.gap_1st_to_2nd_price || 0) / 10000).toLocaleString();
+        showToast(`✅ [${caseNo}] 저장 및 시뮬레이션 완료! (제시 적정가 ${suggMan}만원 · 낙찰 시 이득 +${profMan}만원 · 1등-2등 격차 ${gapMan}만원)`);
+        setTimeout(() => location.reload(), 1100);
       }
+    }
+
+    // ===== 🤖 생성형 AI 토론용 상세 텍스트 추출 & 자금 유동성 전략 컨트롤러 =====
+    const ALL_STRATEGY_IDS = [
+      'newborn_special',
+      'first_time_buyer',
+      'auction_balance_loan',
+      'jeonse_126_leverage',
+      'policy_mortgage',
+      'short_term_flipping'
+    ];
+
+    let currentAiModalState = {
+      isBulk: false,
+      caseNo: '',
+      attractiveOnly: true,
+      includePrompt: true,
+      strategies: ['newborn_special', 'first_time_buyer', 'auction_balance_loan', 'jeonse_126_leverage'],
+      availableCashWon: null,
+      baseText: ''
+    };
+
+    function syncStrategyChipUI() {
+      const selected = new Set(currentAiModalState.strategies || []);
+      ALL_STRATEGY_IDS.forEach(id => {
+        const btn = document.getElementById('strat-btn-' + id);
+        if (!btn) return;
+        const checkEl = btn.querySelector('.strat-check');
+        if (selected.has(id)) {
+          btn.className = 'strat-chip px-2.5 py-1.5 rounded-lg border border-emerald-500/70 bg-emerald-950/60 text-emerald-200 text-left font-bold transition flex items-center justify-between gap-1 shadow-sm';
+          if (checkEl) checkEl.textContent = '✔ 선택됨';
+        } else {
+          btn.className = 'strat-chip px-2.5 py-1.5 rounded-lg border border-slate-800 bg-slate-900/70 text-slate-400 hover:bg-slate-800 hover:text-slate-200 text-left font-medium transition flex items-center justify-between gap-1';
+          if (checkEl) checkEl.textContent = '+ 추가';
+        }
+      });
+    }
+
+    async function toggleFundingStrategy(stratId) {
+      const idx = currentAiModalState.strategies.indexOf(stratId);
+      if (idx >= 0) {
+        currentAiModalState.strategies.splice(idx, 1);
+      } else {
+        currentAiModalState.strategies.push(stratId);
+      }
+      syncStrategyChipUI();
+      await fetchAndRenderAiModal();
+    }
+
+    async function applyStrategyPreset(presetIds) {
+      currentAiModalState.strategies = [...presetIds];
+      syncStrategyChipUI();
+      await fetchAndRenderAiModal();
+    }
+
+    async function onAvailableCashChanged() {
+      const cashInput = document.getElementById('ai-available-cash');
+      const manwon = parseInt(cashInput.value || '0', 10);
+      currentAiModalState.availableCashWon = (manwon && manwon > 0) ? (manwon * 10000) : null;
+      await fetchAndRenderAiModal();
+    }
+
+    async function setQuickAvailableCash(manwon) {
+      const cashInput = document.getElementById('ai-available-cash');
+      if (manwon > 0) {
+        cashInput.value = manwon;
+        currentAiModalState.availableCashWon = manwon * 10000;
+      } else {
+        cashInput.value = '';
+        currentAiModalState.availableCashWon = null;
+      }
+      await fetchAndRenderAiModal();
+    }
+
+    function renderAiLiquiditySummaryBar(liquidity) {
+      const bar = document.getElementById('ai-liquidity-summary-bar');
+      if (!bar) return;
+      if (!liquidity || !liquidity.strategies || liquidity.strategies.length === 0) {
+        bar.classList.add('hidden');
+        bar.innerHTML = '';
+        return;
+      }
+      bar.classList.remove('hidden');
+      const itemsHtml = liquidity.strategies.map(s => {
+        const badgeColor = s.eligible
+          ? 'bg-emerald-950/70 border-emerald-500/40 text-emerald-200'
+          : 'bg-rose-950/60 border-rose-500/40 text-rose-200';
+        return `
+          <div class="px-2 py-1 rounded border ${badgeColor} flex flex-wrap items-center justify-between gap-2">
+            <span><strong>${s.name}</strong> · ${s.eligibility_status}</span>
+            <span>한도 <strong>${formatEokManJs(s.max_financing)}</strong> | 필요자본 <strong class="text-amber-300">${formatEokManJs(s.required_self_cash)}</strong> (${s.cash_verdict})</span>
+          </div>
+        `;
+      }).join('');
+      bar.innerHTML = `
+        <div class="text-[11px] font-bold text-slate-300 mb-1">
+          ⚡ [${liquidity.case_no}] 입찰보증금(10%) <strong class="text-amber-300">${formatEokManJs(liquidity.bid_deposit_10pct)}</strong> | 적정낙찰가+부대비용 총액 <strong class="text-white">${formatEokManJs(liquidity.total_required_funds)}</strong> 기준 선택 수단별 유동성 요약:
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-1">${itemsHtml}</div>
+      `;
+    }
+
+    function updateAiCharStats(text) {
+      const charCount = text.length.toLocaleString();
+      const lineCount = text.split('\n').length.toLocaleString();
+      document.getElementById('ai-char-stats').textContent = `${charCount}자 / ${lineCount}줄`;
+    }
+
+    function updateAiModalTextWithCustomQuestion() {
+      const customQ = (document.getElementById('ai-custom-question').value || '').trim();
+      const textarea = document.getElementById('ai-modal-textarea');
+      let finalText = currentAiModalState.baseText;
+      if (customQ) {
+        finalText += `\n\n---\n\n## 💬 나의 추가 질문 및 투자 조건\n- ${customQ}\n`;
+      }
+      textarea.value = finalText;
+      updateAiCharStats(finalText);
+    }
+
+    function buildStrategyQueryParams() {
+      const stratParam = (currentAiModalState.strategies && currentAiModalState.strategies.length > 0)
+        ? currentAiModalState.strategies.join(',')
+        : 'none';
+      let qs = `&strategies=${encodeURIComponent(stratParam)}`;
+      if (currentAiModalState.availableCashWon && currentAiModalState.availableCashWon > 0) {
+        qs += `&available_cash=${currentAiModalState.availableCashWon}`;
+      }
+      return qs;
+    }
+
+    async function fetchAndRenderAiModal() {
+      const textarea = document.getElementById('ai-modal-textarea');
+      textarea.value = '⏳ 매물 상세 데이터, 선택된 자금 유동성 전략 및 AI 토론 프롬프트를 생성하고 있습니다...';
+
+      const promptParam = currentAiModalState.includePrompt ? 'true' : 'false';
+      const stratQs = buildStrategyQueryParams();
+      let url = '';
+      if (currentAiModalState.isBulk) {
+        const attrParam = currentAiModalState.attractiveOnly ? 'true' : 'false';
+        url = `/api/properties-ai-text?attractive_only=${attrParam}&include_prompt=${promptParam}${stratQs}`;
+      } else {
+        url = `/api/properties/${encodeURIComponent(currentAiModalState.caseNo)}/ai-text?include_prompt=${promptParam}${stratQs}`;
+      }
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          textarea.value = '텍스트 추출 중 오류가 발생했습니다: ' + (data.detail || '알 수 없는 오류');
+          return;
+        }
+        currentAiModalState.baseText = data.text || '';
+        if (currentAiModalState.isBulk) {
+          document.getElementById('ai-modal-title').textContent =
+            `추출된 매력 매물 전체 (${data.count}건) AI 비교 토론용 상세 텍스트`;
+          renderAiLiquiditySummaryBar(null);
+        } else {
+          document.getElementById('ai-modal-title').textContent =
+            `[${data.case_no}] ${data.property_type} 상세 텍스트 추출 (${data.address})`;
+          renderAiLiquiditySummaryBar(data.liquidity_analysis || null);
+        }
+        updateAiModalTextWithCustomQuestion();
+      } catch (e) {
+        textarea.value = '네트워크 오류로 텍스트를 불러오지 못했습니다.';
+      }
+    }
+
+    async function openPropertyAiModal(caseNo) {
+      currentAiModalState.isBulk = false;
+      currentAiModalState.caseNo = caseNo;
+      currentAiModalState.attractiveOnly = true;
+      currentAiModalState.includePrompt = true;
+      currentAiModalState.baseText = '';
+      document.getElementById('ai-text-modal').classList.remove('hidden');
+      syncAiModeButtons();
+      syncStrategyChipUI();
+      await fetchAndRenderAiModal();
+    }
+
+    async function openBulkAiModal(attractiveOnly = true) {
+      currentAiModalState.isBulk = true;
+      currentAiModalState.caseNo = '전체매력매물';
+      currentAiModalState.attractiveOnly = attractiveOnly;
+      currentAiModalState.includePrompt = true;
+      currentAiModalState.baseText = '';
+      document.getElementById('ai-text-modal').classList.remove('hidden');
+      syncAiModeButtons();
+      syncStrategyChipUI();
+      await fetchAndRenderAiModal();
+    }
+
+    function syncAiModeButtons() {
+      const btnPrompt = document.getElementById('ai-mode-prompt');
+      const btnRaw = document.getElementById('ai-mode-raw');
+      if (currentAiModalState.includePrompt) {
+        btnPrompt.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white transition';
+        btnRaw.className = 'px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition';
+      } else {
+        btnPrompt.className = 'px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition';
+        btnRaw.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white transition';
+      }
+    }
+
+    async function switchAiModalMode(includePrompt) {
+      currentAiModalState.includePrompt = includePrompt;
+      syncAiModeButtons();
+      await fetchAndRenderAiModal();
+    }
+
+    function closeAiModal() {
+      document.getElementById('ai-text-modal').classList.add('hidden');
+    }
+
+    async function copyTextToClipboard(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      const textarea = document.getElementById('ai-modal-textarea');
+      textarea.select();
+      document.execCommand('copy');
+    }
+
+    async function copyAiModalText() {
+      const text = document.getElementById('ai-modal-textarea').value;
+      if (!text) return;
+      await copyTextToClipboard(text);
+      const btn = document.getElementById('btn-copy-ai-text');
+      const origHtml = btn.innerHTML;
+      btn.innerHTML = '<span>✅</span> <span>클립보드에 복사 완료!</span>';
+      showToast('📋 매물 상세 내용, 자금 유동성 전략 분석 및 AI 토론 프롬프트가 클립보드에 복사되었습니다! 제미나이(Gemini) 등에 바로 붙여넣기(Ctrl+V) 하세요.');
+      setTimeout(() => { btn.innerHTML = origHtml; }, 2200);
+    }
+
+    async function copyAndLaunchExternalAi(targetUrl, serviceName) {
+      const text = document.getElementById('ai-modal-textarea').value;
+      if (text) {
+        await copyTextToClipboard(text);
+      }
+      showToast(`✨ 클립보드에 매물 상세 텍스트 및 자금 유동성 전략이 복사되었습니다! 새로 열린 ${serviceName} 창에 붙여넣기(Ctrl+V)하여 토론을 시작하세요.`);
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    }
+
+    async function quickCopyAndOpenGemini(caseNo) {
+      try {
+        const stratQs = buildStrategyQueryParams();
+        const res = await fetch(`/api/properties/${encodeURIComponent(caseNo)}/ai-text?include_prompt=true${stratQs}`);
+        const data = await res.json();
+        if (res.ok && data.ok && data.text) {
+          await copyTextToClipboard(data.text);
+          showToast(`✨ [${data.case_no}] 상세 텍스트 및 자금 유동성 전략이 클립보드에 복사되었습니다! 새로 열린 제미나이(Gemini) 창에 붙여넣기(Ctrl+V)하세요.`);
+          window.open('https://gemini.google.com/app', '_blank', 'noopener,noreferrer');
+        } else {
+          openPropertyAiModal(caseNo);
+        }
+      } catch (e) {
+        openPropertyAiModal(caseNo);
+      }
+    }
+
+    function downloadAiModalText(ext) {
+      const text = document.getElementById('ai-modal-textarea').value;
+      if (!text) return;
+      const prefix = currentAiModalState.isBulk ? 'AuctionRadar_매력매물전체' : `AuctionRadar_${currentAiModalState.caseNo}`;
+      const filename = `${prefix}_AI토론용상세.${ext}`;
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(`💾 [${filename}] 파일이 다운로드되었습니다.`);
+    }
+
+    // ===== 🔎 경매 사건번호 맞춤 정밀 분석 실행 컨트롤러 =====
+    function formatEokManJs(amountWon) {
+      if (!amountWon && amountWon !== 0) return '-';
+      const sign = amountWon < 0 ? '-' : '';
+      const man = Math.round(Math.abs(amountWon) / 10000);
+      const eok = Math.floor(man / 10000);
+      const rem = man % 10000;
+      if (eok > 0 && rem > 0) return `${sign}${eok}억 ${rem.toLocaleString()}만원`;
+      if (eok > 0) return `${sign}${eok}억원`;
+      return `${sign}${man.toLocaleString()}만원`;
+    }
+
+    function fillSampleCase(caseStr) {
+      const input = document.getElementById('analyze-case-input');
+      input.value = caseStr;
+      runCaseAnalysis(false);
+    }
+
+    function toggleCaseOverrideForm() {
+      const form = document.getElementById('case-override-form');
+      form.classList.toggle('hidden');
+    }
+
+    function clearCaseOverrides() {
+      ['ov-court', 'ov-address', 'ov-type', 'ov-area', 'ov-appraisal', 'ov-minbid', 'ov-mgmt', 'ov-occupant', 'ov-defect'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+    }
+
+    async function runCaseAnalysis(openAiModalAfter = false) {
+      const caseInput = document.getElementById('analyze-case-input').value.trim();
+      if (!caseInput) {
+        showToast('분석할 경매 사건번호를 입력해주세요. (예: 2025타경 2768)', true);
+        return;
+      }
+
+      const btnRun = document.getElementById('btn-run-case-analyze');
+      const btnAi = document.getElementById('btn-run-case-ai');
+      const panel = document.getElementById('case-analysis-result-panel');
+      const sendTg = document.getElementById('analyze-send-tg').checked;
+
+      // 선택적 상세 조건 읽기
+      const ovCourt = document.getElementById('ov-court').value.trim() || null;
+      const ovAddress = document.getElementById('ov-address').value.trim() || null;
+      const ovType = document.getElementById('ov-type').value || null;
+      const ovAreaVal = parseFloat(document.getElementById('ov-area').value || '0');
+      const ovAppraisalVal = parseInt(document.getElementById('ov-appraisal').value || '0', 10);
+      const ovMinBidVal = parseInt(document.getElementById('ov-minbid').value || '0', 10);
+      const ovMgmtVal = document.getElementById('ov-mgmt').value !== '' ? parseInt(document.getElementById('ov-mgmt').value, 10) : null;
+      const ovOccupant = document.getElementById('ov-occupant').value || null;
+      const ovDefect = document.getElementById('ov-defect').value || null;
+
+      const payload = {
+        case_no: caseInput,
+        send_telegram: sendTg,
+        force_reanalyze: true,
+        court_name: ovCourt,
+        address: ovAddress,
+        property_type: ovType,
+        exclusive_area_m2: ovAreaVal > 0 ? ovAreaVal : null,
+        appraisal_price: ovAppraisalVal > 0 ? ovAppraisalVal * 10000 : null,
+        min_bid_price: ovMinBidVal > 0 ? ovMinBidVal * 10000 : null,
+        unpaid_mgmt_fee: ovMgmtVal !== null ? ovMgmtVal * 10000 : null,
+        occupant_type: ovOccupant,
+        has_tenant: ovOccupant ? (ovOccupant === '임차인') : null,
+        has_rights_defect: ovDefect ? (ovDefect === 'defect') : null,
+        strategies: currentAiModalState.strategies,
+        available_cash: currentAiModalState.availableCashWon
+      };
+
+      btnRun.disabled = true;
+      btnAi.disabled = true;
+      const origRunHtml = btnRun.innerHTML;
+      btnRun.innerHTML = '⏳ 5단계 파이프라인 분석 중...';
+      panel.classList.remove('hidden');
+      panel.innerHTML = `
+        <div class="rounded-xl bg-slate-950 border border-indigo-500/40 p-4 text-xs text-indigo-200 flex items-center gap-3">
+          <span class="text-lg">⚙️</span>
+          <div>
+            <p class="font-bold text-white">[${caseInput}] 경매 사건번호 맞춤 5단계 분석 파이프라인 구동 중...</p>
+            <p class="text-slate-400 mt-0.5">① 법원문건 권리/점유/관리비 파싱 → ② 6대 부동산 사이트 교차분석 → ③ 4대 핵심 필터 & 매력도 점수 → ④ 3단계 입찰가 산출 → ⑤ AI 토론 프롬프트 생성</p>
+          </div>
+        </div>
+      `;
+
+      try {
+        const res = await fetch('/api/analyze-case', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          const errMsg = data.detail || '사건번호 분석 중 오류가 발생했습니다.';
+          panel.innerHTML = `<div class="rounded-xl bg-rose-950/60 border border-rose-500/50 p-4 text-xs text-rose-200">${errMsg}</div>`;
+          showToast(errMsg, true);
+          return;
+        }
+
+        renderAnalyzedCaseResult(data);
+        showToast(`✅ [${data.case_no}] 5단계 정밀 분석 완료! (매력도 ${data.property.attractiveness_score}점 · 적정 추천입찰가 ${formatEokManJs(data.property.recommendation.optimal_bid)})`);
+
+        if (openAiModalAfter) {
+          currentAiModalState.isBulk = false;
+          currentAiModalState.caseNo = data.case_no;
+          currentAiModalState.attractiveOnly = true;
+          currentAiModalState.includePrompt = true;
+          currentAiModalState.baseText = data.ai_discussion_text || '';
+          document.getElementById('ai-text-modal').classList.remove('hidden');
+          document.getElementById('ai-modal-title').textContent =
+            `[${data.case_no}] ${data.property.property_type} 상세 텍스트 추출 (${data.property.address})`;
+          syncAiModeButtons();
+          syncStrategyChipUI();
+          renderAiLiquiditySummaryBar(data.liquidity_analysis || null);
+          updateAiModalTextWithCustomQuestion();
+        }
+      } catch (e) {
+        panel.innerHTML = `<div class="rounded-xl bg-rose-950/60 border border-rose-500/50 p-4 text-xs text-rose-200">네트워크 오류가 발생했습니다.</div>`;
+        showToast('사건번호 분석 요청 중 오류가 발생했습니다.', true);
+      } finally {
+        btnRun.disabled = false;
+        btnAi.disabled = false;
+        btnRun.innerHTML = origRunHtml;
+      }
+    }
+
+    function renderAnalyzedCaseResult(data) {
+      const panel = document.getElementById('case-analysis-result-panel');
+      const p = data.property;
+      const rec = p.recommendation;
+      const steps = data.pipeline_steps || [];
+      const pyeong = (p.exclusive_area_m2 / 3.3058).toFixed(1);
+
+      const stepsHtml = steps.map(s => `
+        <div class="rounded-lg bg-slate-900/90 border border-slate-800 p-2.5 space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-extrabold text-indigo-400">${s.step}. ${s.title}</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">${s.status}</span>
+          </div>
+          <p class="text-[11px] text-slate-300">${s.detail}</p>
+        </div>
+      `).join('');
+
+      const attrBadge = p.is_attractive
+        ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">✅ 매력 매물 선정 (${p.attractiveness_score}점)</span>`
+        : `<span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">🚫 조건 미충족 주의 (${p.attractiveness_score}점)</span>`;
+
+      const rejectionHtml = (!p.is_attractive && p.rejection_reasons && p.rejection_reasons.length > 0)
+        ? `<div class="rounded-xl bg-rose-950/40 border border-rose-500/40 p-3 text-xs text-rose-200">
+             <p class="font-bold text-rose-300 mb-1">⚠️ 핵심 필터 주의/제외 사유:</p>
+             <ul class="list-disc list-inside space-y-0.5">${p.rejection_reasons.map(r => `<li>${r}</li>`).join('')}</ul>
+           </div>`
+        : '';
+
+      panel.innerHTML = `
+        <div class="space-y-4">
+          <!-- 5단계 파이프라인 실행 로그 -->
+          <div>
+            <p class="text-xs font-bold text-indigo-300 mb-2">⚡ [${p.case_no}] 5단계 분석 파이프라인 실행 결과</p>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+              ${stepsHtml}
+            </div>
+          </div>
+
+          <!-- 분석된 매물 상세 결과 카드 -->
+          <div class="rounded-2xl border-2 ${p.is_attractive ? 'border-emerald-500/50 bg-slate-950/90' : 'border-rose-500/50 bg-slate-950/90'} p-5 space-y-4">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-800 pb-4">
+              <div class="space-y-1.5">
+                <div class="flex flex-wrap items-center gap-2">
+                  ${attrBadge}
+                  <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-200">${p.property_type}</span>
+                  <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300">${p.court_name} · ${p.case_no}</span>
+                  <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30">매각기일 ${p.auction_date} (${p.failed_count}회 유찰)</span>
+                </div>
+                <h3 class="text-lg md:text-xl font-extrabold text-white">${p.address}</h3>
+                <p class="text-xs text-slate-400">전용면적 <strong>${p.exclusive_area_m2}㎡</strong> (약 ${pyeong}평) · 대지권 <strong>${p.land_share_m2}㎡</strong></p>
+              </div>
+
+              <div class="flex flex-col gap-2 min-w-[320px]">
+                <div class="grid grid-cols-3 gap-3 bg-slate-900 rounded-xl p-3 border border-slate-800">
+                  <div>
+                    <p class="text-[11px] text-slate-400">법원 감정가</p>
+                    <p class="text-sm font-semibold text-slate-200">${formatEokManJs(p.appraisal_price)}</p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] text-slate-400">최저매각가격</p>
+                    <p class="text-sm font-bold text-amber-400">${formatEokManJs(p.min_bid_price)}</p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] text-emerald-300 font-semibold">🎯 추천 입찰가(적정)</p>
+                    <p class="text-base font-extrabold text-emerald-400">${formatEokManJs(rec.optimal_bid)}</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="openPropertyAiModal('${p.case_no}')"
+                    class="flex-1 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition flex items-center justify-center gap-1.5">
+                    <span>🤖</span> <span>AI 토론용 상세 텍스트 추출 (제미나이·GPT)</span>
+                  </button>
+                  <button onclick="quickCopyAndOpenGemini('${p.case_no}')"
+                    class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-indigo-500/40 text-xs font-semibold text-indigo-300 transition flex items-center gap-1 shrink-0">
+                    <span>✨</span> <span>복사 후 Gemini 열기</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            ${rejectionHtml}
+
+            <!-- 권리 / 점유 / 미납관리비 요약 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div class="rounded-xl p-3 bg-slate-900 border border-slate-800">
+                <div class="flex justify-between font-bold">
+                  <span class="text-slate-300">🏠 점유 및 임대차 관계</span>
+                  <span class="${!p.has_tenant && p.occupant_type === '소유자' ? 'text-emerald-400' : 'text-rose-400'}">
+                    ${!p.has_tenant && p.occupant_type === '소유자' ? '✔ 임차인 없음 · 소유자 거주' : '✖ ' + p.occupant_type}
+                  </span>
+                </div>
+                <p class="text-slate-400 mt-1">${p.occupancy_detail}</p>
+              </div>
+              <div class="rounded-xl p-3 bg-slate-900 border border-slate-800">
+                <div class="flex justify-between font-bold">
+                  <span class="text-slate-300">⚖️ 등기/권리상 하자</span>
+                  <span class="${!p.has_rights_defect ? 'text-emerald-400' : 'text-rose-400'}">
+                    ${!p.has_rights_defect ? '✔ 인수 권리 0원' : '✖ 인수 ' + formatEokManJs(p.assumed_rights_amount)}
+                  </span>
+                </div>
+                <p class="text-slate-400 mt-1">${p.base_right_info}</p>
+              </div>
+              <div class="rounded-xl p-3 bg-slate-900 border border-slate-800">
+                <div class="flex justify-between font-bold">
+                  <span class="text-slate-300">🧾 미납 관리비</span>
+                  <span class="text-amber-300">총 ${formatEokManJs(p.unpaid_mgmt_fee)} (${p.unpaid_mgmt_months}개월)</span>
+                </div>
+                <p class="text-slate-400 mt-1">${p.unpaid_mgmt_note}</p>
+              </div>
+            </div>
+
+            <!-- 6대 사이트 & 3단계 입찰가 요약 -->
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-2.5 text-xs">
+              <div class="rounded-lg bg-slate-900/90 border border-slate-800 p-2.5">
+                <p class="text-indigo-300 font-bold">① 디스코 실매각</p>
+                <p class="text-sm font-bold text-white mt-0.5">${formatEokManJs(p.disco.nearby_sold_price_avg)}</p>
+              </div>
+              <div class="rounded-lg bg-slate-900/90 border border-slate-800 p-2.5">
+                <p class="text-cyan-300 font-bold">② 국토부 실거래</p>
+                <p class="text-sm font-bold text-white mt-0.5">${formatEokManJs(p.molit.similar_area_avg_price)}</p>
+              </div>
+              <div class="rounded-lg bg-slate-900/90 border border-slate-800 p-2.5">
+                <p class="text-amber-300 font-bold">③ 아실 정비구역</p>
+                <p class="text-xs font-bold text-white mt-0.5 truncate">${p.asil.redev_zone_name}</p>
+              </div>
+              <div class="rounded-lg bg-slate-900/90 border border-slate-800 p-2.5">
+                <p class="text-teal-300 font-bold">④ 부동산플래닛</p>
+                <p class="text-sm font-bold text-white mt-0.5">준공 ${p.bdsplanet.building_age_years}년차</p>
+              </div>
+              <div class="rounded-lg bg-slate-900/90 border border-slate-800 p-2.5">
+                <p class="text-sky-300 font-bold">⑤ 보증보험(126%)</p>
+                <p class="text-sm font-bold text-sky-300 mt-0.5">${formatEokManJs(p.official_price.jeonse_insurance_limit)}</p>
+              </div>
+              <div class="rounded-lg bg-slate-900/90 border border-slate-800 p-2.5">
+                <p class="text-green-300 font-bold">⑥ 네이버 최저호가</p>
+                <p class="text-sm font-bold text-white mt-0.5">${formatEokManJs(p.naver_land.asking_sale_min)}</p>
+              </div>
+            </div>
+
+            <!-- 3단계 추천 입찰가 & 예상 순마진 -->
+            <div class="rounded-xl bg-emerald-950/20 border border-emerald-500/30 p-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-xs">
+              <div class="space-y-1">
+                <p class="font-bold text-emerald-300">
+                  🎯 3단계 추천 입찰가 (기준 추정시세 ${formatEokManJs(rec.estimated_market_value)} | 공용관리비 -${formatEokManJs(rec.assumed_unpaid_mgmt_fee)} | 명도·취득세 -${formatEokManJs(rec.estimated_eviction_and_tax)})
+                </p>
+                <div class="flex flex-wrap gap-4 text-slate-300">
+                  <span>보수적(확률 ${rec.conservative_win_prob}%): <strong>${formatEokManJs(rec.conservative_bid)}</strong></span>
+                  <span class="text-emerald-300">⭐ 적정 추천가(확률 ${rec.optimal_win_prob}%): <strong class="text-white text-sm">${formatEokManJs(rec.optimal_bid)}</strong> (감정 ${rec.optimal_ratio_to_appraisal}% / 시세 ${rec.optimal_ratio_to_market}%)</span>
+                  <span>공격형(확률 ${rec.aggressive_win_prob}%): <strong class="text-amber-300">${formatEokManJs(rec.aggressive_bid)}</strong></span>
+                </div>
+              </div>
+              <div class="text-right shrink-0">
+                <span class="text-slate-400">적정가 낙찰 시 예상 순안전마진:</span>
+                <span class="text-base font-extrabold text-emerald-400 ml-1">+${formatEokManJs(rec.expected_net_profit)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
     }
   </script>
 </body>

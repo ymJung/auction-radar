@@ -46,7 +46,7 @@ class Settings:
 
     # Server Port
     HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))
+    PORT: int = int(os.getenv("PORT", "8080"))
 
     @property
     def active_telegram_token(self) -> str:

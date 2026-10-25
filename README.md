@@ -58,7 +58,7 @@ auction-radar/
 │   └── templates/
 │       └── index.html         # Tailwind CSS 기반 반응형 웹 대시보드 UI (필터 탭, 시뮬레이터, 낙찰 기록 폼)
 ├── scripts/
-│   └── keepalive.sh           # 세션 종료/재부팅 후에도 서버(포트 8000) 및 텔레그램 버튼 워커를 무중단 유지하는 데몬 스크립트
+│   └── keepalive.sh           # 세션 종료/재부팅 후에도 서버(포트 8080) 및 텔레그램 버튼 워커를 무중단 유지하는 데몬 스크립트
 ├── tests/
 │   └── test_pipeline_and_api.py # 파서, 126% 룰, 필터링, API 엔드포인트 검증 pytest 스위트
 ├── data/
