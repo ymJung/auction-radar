@@ -64,12 +64,14 @@ class OfficialPriceData(BaseModel):
 
 
 class NaverLandData(BaseModel):
-    """⑥ 네이버부동산: 현재 시장 매매/전세 호가"""
+    """⑥ 네이버부동산: 현재 시장 매매/전세 호가 및 단지 물건종류 재검증"""
     complex_or_area_name: str = Field(..., description="단지명 또는 인근 구역명")
     asking_sale_min: int = Field(..., description="현재 네이버부동산 매매 최저 호가(원)")
     asking_sale_avg: int = Field(..., description="현재 네이버부동산 매매 평균 호가(원)")
     asking_jeonse_avg: int = Field(..., description="현재 네이버부동산 전세 평균 호가(원)")
     active_listing_count: int = Field(..., description="현재 등록된 매물 수")
+    verified_property_type: str = Field(default="", description="네이버부동산·실거래 단지 대조를 통해 재검증된 물건종류 (아파트/오피스텔/다세대(빌라))")
+    verification_source: str = Field(default="", description="물건종류 재검증 출처 및 판정 근거")
     source_url: str = Field(default="https://new.land.naver.com", description="네이버부동산 링크")
 
 

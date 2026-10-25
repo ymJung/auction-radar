@@ -637,8 +637,12 @@ def run_scraping_and_analysis_pipeline() -> Tuple[List[AuctionProperty], List[Wi
 def build_property_from_raw_dict(
     raw: dict,
     history: List[WinningBidRecord],
+    enable_network_verification: bool = False,
 ) -> AuctionProperty:
-    """원시 매물 딕셔너리 데이터를 파싱하고 6대 사이트 교차분석 및 입찰가 추천까지 수행해 AuctionProperty를 반환합니다."""
+    """
+    원시 매물 딕셔너리 데이터를 파싱하고, 수집 후 네이버부동산/실거래 단지 정보를 통해
+    물건종류(아파트 vs 오피스텔 vs 다세대)를 다시 인식·보정한 뒤 입찰가 추천까지 수행해 AuctionProperty를 반환합니다.
+    """
     parsed_court = CourtAuctionParser.parse_occupancy_and_rights(raw["court_doc_html"])
     disco_data = DiscoScraper.parse_response(raw["disco_payload"])
     molit_data = MolitScraper.parse_openapi_xml(
@@ -656,16 +660,33 @@ def build_property_from_raw_dict(
         official_price=raw["official_price"],
         reference_bid_price=raw["min_bid_price"],
     )
+
+    # 수집 후 네이버부동산 및 단지/건축물 정보 기반 물건종류(아파트 vs 오피스텔 등) 재인식 및 보정
+    if raw.get("property_type_locked"):
+        verified_type = raw["property_type"]
+        verification_source = "사용자 직접 지정 물건종류 적용"
+    else:
+        verified_type, verification_source = NaverLandScraper.verify_property_type(
+            address=raw["address"],
+            initial_type=raw.get("property_type", ""),
+            complex_name=raw.get("naver_complex", ""),
+            exclusive_area_m2=raw["exclusive_area_m2"],
+            auction_snippets=raw.get("auction_snippets", ""),
+            enable_network=enable_network_verification,
+        )
+
     naver_data = NaverLandScraper.parse_articles_json(
         complex_name=raw["naver_complex"],
         sale_prices=raw["naver_sales"],
         jeonse_prices=raw["naver_jeonses"],
+        verified_property_type=verified_type,
+        verification_source=verification_source,
     )
 
     prop = AuctionProperty(
         case_no=raw["case_no"],
         court_name=raw["court_name"],
-        property_type=raw["property_type"],
+        property_type=verified_type,
         address=raw["address"],
         exclusive_area_m2=raw["exclusive_area_m2"],
         land_share_m2=raw["land_share_m2"],
@@ -824,19 +845,36 @@ def analyze_case_on_demand(
         )
         base_addr = addr_match.group(1).strip() if addr_match else f"{fb[1]} ({norm_case})"
 
-        if "오피스텔" in combined_snippets:
-            base_type = "오피스텔"
-        elif any(k in combined_snippets for k in ("다세대", "빌라", "연립")):
-            base_type = "다세대(빌라)"
-        elif "아파트" in combined_snippets:
-            base_type = "아파트"
-        else:
-            base_type = fb[4]
-
         area_match = re.search(r"전용(?:면적)?[^\d]{0,10}(\d{2,3}(?:\.\d{1,2})?)\s*㎡", combined_snippets)
         if not area_match:
             area_match = re.search(r"(\d{2,3}\.\d{1,2})\s*㎡", combined_snippets)
         base_area = float(area_match.group(1)) if area_match else fb[5]
+
+        # 1차 원천 분류 후 네이버부동산·단지정보 교차 재인식 수행 (리치고 등 광고 스니펫의 '오피스텔' 단어 오인식 방지)
+        cleaned_snippets = re.sub(r"아파트[·/,\s]*오피스텔", "", combined_snippets)
+        apt_cnt = cleaned_snippets.count("아파트")
+        off_cnt = cleaned_snippets.count("오피스텔")
+        villa_cnt = (
+            cleaned_snippets.count("다세대")
+            + cleaned_snippets.count("빌라")
+            + cleaned_snippets.count("연립")
+        )
+        if "아파트" in base_addr or (apt_cnt >= off_cnt and apt_cnt > 0):
+            initial_guess = "아파트"
+        elif villa_cnt > apt_cnt and villa_cnt >= off_cnt:
+            initial_guess = "다세대(빌라)"
+        elif off_cnt > apt_cnt:
+            initial_guess = "오피스텔"
+        else:
+            initial_guess = fb[4]
+
+        base_type, _ = NaverLandScraper.verify_property_type(
+            address=base_addr,
+            initial_type=initial_guess,
+            exclusive_area_m2=base_area,
+            auction_snippets=combined_snippets,
+            enable_network=True,
+        )
 
         base_appraisal = _parse_korean_money_from_text(combined_snippets, "감정가", fb[6])
         base_min_bid = _parse_korean_money_from_text(
@@ -868,11 +906,21 @@ def analyze_case_on_demand(
         base_occupant = "임차인" if base_tenant else "소유자"
         base_mgmt_fee = 600_000
 
-    # 사용자 overrides 반영
+    # 사용자 overrides 반영 (사용자가 직접 property_type을 지정한 경우가 아니면 네이버부동산·단지 정보로 재검증)
     court_name = str(overrides.get("court_name") or base_court).strip()
     address = str(overrides.get("address") or base_addr).strip()
-    prop_type = str(overrides.get("property_type") or base_type).strip()
     exclusive_area = float(overrides.get("exclusive_area_m2") or base_area)
+    user_locked_type = bool(overrides.get("property_type"))
+    if user_locked_type:
+        prop_type = str(overrides["property_type"]).strip()
+    else:
+        prop_type, _ = NaverLandScraper.verify_property_type(
+            address=address,
+            initial_type=base_type,
+            exclusive_area_m2=exclusive_area,
+            auction_snippets=combined_snippets,
+            enable_network=True,
+        )
     appraisal_price = int(overrides.get("appraisal_price") or base_appraisal)
     min_bid_price = int(overrides.get("min_bid_price") or base_min_bid)
     if min_bid_price > appraisal_price:
@@ -963,7 +1011,7 @@ def analyze_case_on_demand(
 
     official_price = int(
         overrides.get("official_price")
-        or (matched_hist.official_price if matched_hist else int(round(est_market * 0.69, -5)))
+        or (matched_hist.official_price if matched_hist else int(round(est_market * 0.69, -6)))
     )
     assumed_common_man = int(round(unpaid_mgmt_fee * 0.75, -4)) // 10_000
 
@@ -971,6 +1019,8 @@ def analyze_case_on_demand(
         "case_no": norm_case,
         "court_name": court_name,
         "property_type": prop_type,
+        "property_type_locked": user_locked_type,
+        "auction_snippets": combined_snippets,
         "address": address,
         "exclusive_area_m2": exclusive_area,
         "land_share_m2": round(exclusive_area * (0.62 if prop_type == "다세대(빌라)" else 0.45), 2),
@@ -1006,7 +1056,7 @@ def analyze_case_on_demand(
         "naver_sales": [int(round(est_market * 1.03, -5)), int(round(est_market * 1.06, -5))],
         "naver_jeonses": [int(round(est_market * 0.68, -5)), int(round(est_market * 0.71, -5))],
     }
-    return build_property_from_raw_dict(raw_dynamic, history)
+    return build_property_from_raw_dict(raw_dynamic, history, enable_network_verification=not user_locked_type)
 
 
 def build_pipeline_execution_steps(prop: AuctionProperty) -> List[dict]:
@@ -1032,9 +1082,10 @@ def build_pipeline_execution_steps(prop: AuctionProperty) -> List[dict]:
         },
         {
             "step": "STEP 2",
-            "title": "6대 부동산 플랫폼 교차 데이터 수집 & 파싱",
+            "title": "6대 부동산 플랫폼 교차 데이터 수집 & 네이버부동산 물건종류 재검증",
             "status": "완료",
             "detail": (
+                f"물건종류 검증: {prop.property_type} ({prop.naver_land.verification_source or '네이버부동산·단지정보 확인'}) | "
                 f"①디스코 {prop.disco.nearby_sold_price_avg // 10000:,}만 · "
                 f"②국토부실거래 {prop.molit.similar_area_avg_price // 10000:,}만 · "
                 f"③아실 {'재개발포함🔥' if prop.asil.is_redev_zone else '일반구역'} · "

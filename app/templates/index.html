@@ -395,11 +395,14 @@
             <!-- ⑥ 네이버부동산 -->
             <div class="rounded-xl bg-slate-950/90 border border-slate-800 p-3.5 space-y-1">
               <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-green-300">⑥ 네이버부동산 (현재 시장 호가)</span>
-                <span class="text-[11px] text-slate-400">매물 {{ p.naver_land.active_listing_count }}건</span>
+                <span class="text-xs font-bold text-green-300">⑥ 네이버부동산 (호가 · 종류재검증)</span>
+                <span class="text-[11px] text-emerald-400 font-semibold">{{ p.naver_land.verified_property_type or p.property_type }} 확인✔</span>
               </div>
               <p class="text-base font-bold text-white">매매 최저 {{ p.naver_land.asking_sale_min | eok_man }}</p>
               <p class="text-xs text-slate-400">매매 평균 {{ p.naver_land.asking_sale_avg | eok_man }} · 전세 평균 {{ p.naver_land.asking_jeonse_avg | eok_man }}</p>
+              {% if p.naver_land.verification_source %}
+              <p class="text-[11px] text-emerald-300/80 truncate" title="{{ p.naver_land.verification_source }}">🔎 {{ p.naver_land.verification_source }}</p>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -688,10 +691,10 @@
   </main>
 
   <!-- 🤖 생성형 AI (제미나이 / ChatGPT / Claude) 토론용 상세 텍스트 추출 모달 -->
-  <div id="ai-text-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-indigo-500/40 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+  <div id="ai-text-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-indigo-500/40 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
       <!-- 모달 헤더 -->
-      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 shrink-0">
         <div>
           <div class="flex items-center gap-2">
             <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
@@ -710,145 +713,148 @@
         </button>
       </div>
 
-      <!-- 모달 컨트롤 바 (포맷 전환 & 자금 유동성 전략 선택 & 내 추가 질문 입력) -->
-      <div class="px-6 py-3 bg-slate-900/90 border-b border-slate-800 space-y-3">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="text-xs font-semibold text-slate-400">추출 형식:</span>
-            <button onclick="switchAiModalMode(true)" id="ai-mode-prompt"
-              class="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white transition">
-              🤖 AI 심층 토론 프롬프트 + 질문 포함 (추천)
-            </button>
-            <button onclick="switchAiModalMode(false)" id="ai-mode-raw"
-              class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
-              📄 순수 매물 상세 데이터만
-            </button>
-          </div>
-          <div id="ai-char-stats" class="text-[11px] text-slate-400 font-mono">
-            0자 / 0줄
-          </div>
-        </div>
-
-        <!-- 💰 자금 유동성 확인 및 가용 대출·레버리지 전략 선택 패널 -->
-        <div class="rounded-xl bg-slate-950/90 border border-emerald-500/30 p-3 space-y-2.5">
+      <!-- 모달 스크롤 가능 본문 영역 (컨트롤 바 + 가용자금 전략 선택 + 추출 텍스트 통합 스크롤) -->
+      <div id="ai-modal-scroll-body" class="flex-1 min-h-0 overflow-y-auto overscroll-contain divide-y divide-slate-800">
+        <!-- 모달 컨트롤 바 (포맷 전환 & 자금 유동성 전략 선택 & 내 추가 질문 입력) -->
+        <div class="px-6 py-3 bg-slate-900/90 space-y-3">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="flex items-center gap-1.5">
-              <span class="text-xs font-extrabold text-emerald-300">
-                💰 자금 유동성 & 가용 수단 전략 선택 (복수 선택 가능 · 제미나이 상담 export에 즉시 반영)
-              </span>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-xs font-semibold text-slate-400">추출 형식:</span>
+              <button onclick="switchAiModalMode(true)" id="ai-mode-prompt"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white transition">
+                🤖 AI 심층 토론 프롬프트 + 질문 포함 (추천)
+              </button>
+              <button onclick="switchAiModalMode(false)" id="ai-mode-raw"
+                class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                📄 순수 매물 상세 데이터만
+              </button>
             </div>
-            <div class="flex flex-wrap items-center gap-1 text-[11px]">
-              <button type="button" onclick="applyStrategyPreset(['newborn_special','first_time_buyer','auction_balance_loan','jeonse_126_leverage','policy_mortgage','short_term_flipping'])"
-                class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 font-semibold transition">
-                전체 수단 선택
-              </button>
-              <button type="button" onclick="applyStrategyPreset(['newborn_special','first_time_buyer','auction_balance_loan','policy_mortgage'])"
-                class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 transition">
-                정책·실거주 위주
-              </button>
-              <button type="button" onclick="applyStrategyPreset(['auction_balance_loan','jeonse_126_leverage','short_term_flipping'])"
-                class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition">
-                경락·전세레버리지 위주
-              </button>
-              <button type="button" onclick="applyStrategyPreset([])"
-                class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800 transition">
-                선택 해제
-              </button>
+            <div id="ai-char-stats" class="text-[11px] text-slate-400 font-mono">
+              0자 / 0줄
             </div>
           </div>
 
-          <!-- 전략 토글 칩 6종 -->
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs" id="ai-strategy-chips">
-            <button type="button" onclick="toggleFundingStrategy('newborn_special')" id="strat-btn-newborn_special"
-              data-strat="newborn_special"
-              class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
-              <span>👶 신생아 특례 대출</span>
-              <span class="strat-check text-[10px]">✔</span>
-            </button>
-            <button type="button" onclick="toggleFundingStrategy('first_time_buyer')" id="strat-btn-first_time_buyer"
-              data-strat="first_time_buyer"
-              class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
-              <span>🏡 생애최초 대출 (LTV 80%)</span>
-              <span class="strat-check text-[10px]">✔</span>
-            </button>
-            <button type="button" onclick="toggleFundingStrategy('auction_balance_loan')" id="strat-btn-auction_balance_loan"
-              data-strat="auction_balance_loan"
-              class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
-              <span>⚖️ 경매 경락잔금대출</span>
-              <span class="strat-check text-[10px]">✔</span>
-            </button>
-            <button type="button" onclick="toggleFundingStrategy('jeonse_126_leverage')" id="strat-btn-jeonse_126_leverage"
-              data-strat="jeonse_126_leverage"
-              class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
-              <span>💎 전세보증보험(126%) 세팅</span>
-              <span class="strat-check text-[10px]">✔</span>
-            </button>
-            <button type="button" onclick="toggleFundingStrategy('policy_mortgage')" id="strat-btn-policy_mortgage"
-              data-strat="policy_mortgage"
-              class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
-              <span>🏛️ 보금자리론·디딤돌</span>
-              <span class="strat-check text-[10px]">✔</span>
-            </button>
-            <button type="button" onclick="toggleFundingStrategy('short_term_flipping')" id="strat-btn-short_term_flipping"
-              data-strat="short_term_flipping"
-              class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
-              <span>🔄 단기 매도(플리핑)·사업자</span>
-              <span class="strat-check text-[10px]">✔</span>
-            </button>
-          </div>
+          <!-- 💰 자금 유동성 확인 및 가용 대출·레버리지 전략 선택 패널 -->
+          <div class="rounded-xl bg-slate-950/90 border border-emerald-500/30 p-3 space-y-2.5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-extrabold text-emerald-300">
+                  💰 자금 유동성 & 가용 수단 전략 선택 (복수 선택 가능 · 제미나이 상담 export에 즉시 반영)
+                </span>
+              </div>
+              <div class="flex flex-wrap items-center gap-1 text-[11px]">
+                <button type="button" onclick="applyStrategyPreset(['newborn_special','first_time_buyer','auction_balance_loan','jeonse_126_leverage','policy_mortgage','short_term_flipping'])"
+                  class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 font-semibold transition">
+                  전체 수단 선택
+                </button>
+                <button type="button" onclick="applyStrategyPreset(['newborn_special','first_time_buyer','auction_balance_loan','policy_mortgage'])"
+                  class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 transition">
+                  정책·실거주 위주
+                </button>
+                <button type="button" onclick="applyStrategyPreset(['auction_balance_loan','jeonse_126_leverage','short_term_flipping'])"
+                  class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition">
+                  경락·전세레버리지 위주
+                </button>
+                <button type="button" onclick="applyStrategyPreset([])"
+                  class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800 transition">
+                  선택 해제
+                </button>
+              </div>
+            </div>
 
-          <!-- 내 가용 현금(자기자본) 입력 및 빠른 선택 -->
-          <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80 text-xs">
-            <div class="flex flex-wrap items-center gap-1.5">
-              <label for="ai-available-cash" class="text-slate-300 font-semibold">
-                💵 내 보유 가용 현금(유동성 기준):
-              </label>
-              <input id="ai-available-cash" type="number" step="1000" min="0"
-                onchange="onAvailableCashChanged()"
-                onkeydown="if(event.key==='Enter') onAvailableCashChanged()"
-                placeholder="미입력 시 필요자본만 산출"
-                class="w-36 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white font-bold focus:outline-none focus:border-emerald-500" />
-              <span class="text-slate-400">만원</span>
-              <button type="button" onclick="onAvailableCashChanged()"
-                class="px-2 py-1 rounded bg-emerald-600/80 hover:bg-emerald-500 text-white font-bold text-[11px] transition">
-                유동성 반영
+            <!-- 전략 토글 칩 6종 -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs" id="ai-strategy-chips">
+              <button type="button" onclick="toggleFundingStrategy('newborn_special')" id="strat-btn-newborn_special"
+                data-strat="newborn_special"
+                class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
+                <span>👶 신생아 특례 대출</span>
+                <span class="strat-check text-[10px]">✔</span>
+              </button>
+              <button type="button" onclick="toggleFundingStrategy('first_time_buyer')" id="strat-btn-first_time_buyer"
+                data-strat="first_time_buyer"
+                class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
+                <span>🏡 생애최초 대출 (LTV 80%)</span>
+                <span class="strat-check text-[10px]">✔</span>
+              </button>
+              <button type="button" onclick="toggleFundingStrategy('auction_balance_loan')" id="strat-btn-auction_balance_loan"
+                data-strat="auction_balance_loan"
+                class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
+                <span>⚖️ 경매 경락잔금대출</span>
+                <span class="strat-check text-[10px]">✔</span>
+              </button>
+              <button type="button" onclick="toggleFundingStrategy('jeonse_126_leverage')" id="strat-btn-jeonse_126_leverage"
+                data-strat="jeonse_126_leverage"
+                class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
+                <span>💎 전세보증보험(126%) 세팅</span>
+                <span class="strat-check text-[10px]">✔</span>
+              </button>
+              <button type="button" onclick="toggleFundingStrategy('policy_mortgage')" id="strat-btn-policy_mortgage"
+                data-strat="policy_mortgage"
+                class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
+                <span>🏛️ 보금자리론·디딤돌</span>
+                <span class="strat-check text-[10px]">✔</span>
+              </button>
+              <button type="button" onclick="toggleFundingStrategy('short_term_flipping')" id="strat-btn-short_term_flipping"
+                data-strat="short_term_flipping"
+                class="strat-chip px-2.5 py-1.5 rounded-lg border text-left font-bold transition flex items-center justify-between gap-1">
+                <span>🔄 단기 매도(플리핑)·사업자</span>
+                <span class="strat-check text-[10px]">✔</span>
               </button>
             </div>
-            <div class="flex flex-wrap items-center gap-1 text-[11px]">
-              <span class="text-slate-500">빠른입력:</span>
-              <button type="button" onclick="setQuickAvailableCash(5000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">5천만</button>
-              <button type="button" onclick="setQuickAvailableCash(10000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">1억</button>
-              <button type="button" onclick="setQuickAvailableCash(15000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">1.5억</button>
-              <button type="button" onclick="setQuickAvailableCash(20000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">2억</button>
-              <button type="button" onclick="setQuickAvailableCash(30000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">3억</button>
-              <button type="button" onclick="setQuickAvailableCash(0)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-rose-300 border border-slate-800">초기화</button>
+
+            <!-- 내 가용 현금(자기자본) 입력 및 빠른 선택 -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80 text-xs">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <label for="ai-available-cash" class="text-slate-300 font-semibold">
+                  💵 내 보유 가용 현금(유동성 기준):
+                </label>
+                <input id="ai-available-cash" type="number" step="1000" min="0"
+                  onchange="onAvailableCashChanged()"
+                  onkeydown="if(event.key==='Enter') onAvailableCashChanged()"
+                  placeholder="미입력 시 필요자본만 산출"
+                  class="w-36 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white font-bold focus:outline-none focus:border-emerald-500" />
+                <span class="text-slate-400">만원</span>
+                <button type="button" onclick="onAvailableCashChanged()"
+                  class="px-2 py-1 rounded bg-emerald-600/80 hover:bg-emerald-500 text-white font-bold text-[11px] transition">
+                  유동성 반영
+                </button>
+              </div>
+              <div class="flex flex-wrap items-center gap-1 text-[11px]">
+                <span class="text-slate-500">빠른입력:</span>
+                <button type="button" onclick="setQuickAvailableCash(5000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">5천만</button>
+                <button type="button" onclick="setQuickAvailableCash(10000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">1억</button>
+                <button type="button" onclick="setQuickAvailableCash(15000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">1.5억</button>
+                <button type="button" onclick="setQuickAvailableCash(20000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">2억</button>
+                <button type="button" onclick="setQuickAvailableCash(30000)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">3억</button>
+                <button type="button" onclick="setQuickAvailableCash(0)" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-rose-300 border border-slate-800">초기화</button>
+              </div>
             </div>
+
+            <!-- 실시간 전략별 유동성 요약 배지 표시줄 -->
+            <div id="ai-liquidity-summary-bar" class="hidden pt-1.5 border-t border-slate-800/80 text-[11px] text-slate-300 space-y-1"></div>
           </div>
 
-          <!-- 실시간 전략별 유동성 요약 배지 표시줄 -->
-          <div id="ai-liquidity-summary-bar" class="hidden pt-1.5 border-t border-slate-800/80 text-[11px] text-slate-300 space-y-1"></div>
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+            <label for="ai-custom-question" class="text-xs font-semibold text-indigo-300 shrink-0">
+              💬 제미나이에게 추가로 물어볼 내 고민/조건:
+            </label>
+            <input id="ai-custom-question" type="text"
+              oninput="updateAiModalTextWithCustomQuestion()"
+              placeholder="예: 신생아특례 대환 전 브릿지로 쓸 경락잔금대출 중도상환수수료 면제 조건과 명도 일정을 함께 봐줘"
+              class="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500" />
+          </div>
         </div>
 
-        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-          <label for="ai-custom-question" class="text-xs font-semibold text-indigo-300 shrink-0">
-            💬 제미나이에게 추가로 물어볼 내 고민/조건:
-          </label>
-          <input id="ai-custom-question" type="text"
-            oninput="updateAiModalTextWithCustomQuestion()"
-            placeholder="예: 신생아특례 대환 전 브릿지로 쓸 경락잔금대출 중도상환수수료 면제 조건과 명도 일정을 함께 봐줘"
-            class="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500" />
+        <!-- 추출된 텍스트 본문 영역 -->
+        <div class="p-6 bg-slate-950/50">
+          <textarea id="ai-modal-textarea" rows="14"
+            class="w-full min-h-[260px] md:min-h-[320px] p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs md:text-sm text-slate-200 font-mono leading-relaxed focus:outline-none focus:border-indigo-500 resize-y"
+            readonly></textarea>
         </div>
-      </div>
-
-      <!-- 추출된 텍스트 본문 영역 -->
-      <div class="p-6 flex-1 overflow-y-auto bg-slate-950/50">
-        <textarea id="ai-modal-textarea" rows="16"
-          class="w-full h-full min-h-[320px] p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs md:text-sm text-slate-200 font-mono leading-relaxed focus:outline-none focus:border-indigo-500 resize-y"
-          readonly></textarea>
       </div>
 
       <!-- 모달 하단 액션 버튼 (복사 / 제미나이 열기 / 파일 저장) -->
-      <div class="px-6 py-4 border-t border-slate-800 bg-slate-950/80 flex flex-wrap items-center justify-between gap-3">
+      <div class="px-6 py-4 border-t border-slate-800 bg-slate-950/80 flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div class="flex flex-wrap items-center gap-2">
           <button onclick="copyAiModalText()" id="btn-copy-ai-text"
             class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs md:text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition flex items-center gap-1.5">
@@ -1163,6 +1169,8 @@
     }
 
     async function fetchAndRenderAiModal() {
+      const scrollBody = document.getElementById('ai-modal-scroll-body');
+      const prevScrollTop = scrollBody ? scrollBody.scrollTop : 0;
       const textarea = document.getElementById('ai-modal-textarea');
       textarea.value = '⏳ 매물 상세 데이터, 선택된 자금 유동성 전략 및 AI 토론 프롬프트를 생성하고 있습니다...';
 
@@ -1194,6 +1202,7 @@
           renderAiLiquiditySummaryBar(data.liquidity_analysis || null);
         }
         updateAiModalTextWithCustomQuestion();
+        if (scrollBody) scrollBody.scrollTop = prevScrollTop;
       } catch (e) {
         textarea.value = '네트워크 오류로 텍스트를 불러오지 못했습니다.';
       }
@@ -1206,6 +1215,8 @@
       currentAiModalState.includePrompt = true;
       currentAiModalState.baseText = '';
       document.getElementById('ai-text-modal').classList.remove('hidden');
+      const scrollBody = document.getElementById('ai-modal-scroll-body');
+      if (scrollBody) scrollBody.scrollTop = 0;
       syncAiModeButtons();
       syncStrategyChipUI();
       await fetchAndRenderAiModal();
@@ -1218,6 +1229,8 @@
       currentAiModalState.includePrompt = true;
       currentAiModalState.baseText = '';
       document.getElementById('ai-text-modal').classList.remove('hidden');
+      const scrollBody = document.getElementById('ai-modal-scroll-body');
+      if (scrollBody) scrollBody.scrollTop = 0;
       syncAiModeButtons();
       syncStrategyChipUI();
       await fetchAndRenderAiModal();

@@ -24,6 +24,7 @@ from app.database import (
     load_winning_history,
     load_winning_record_by_case_no,
     record_new_winning_bid,
+    reverify_and_sync_all_stored_properties,
     save_pipeline_results,
 )
 from app.models import AuctionProperty, WinningBidRecord
@@ -377,7 +378,8 @@ async def get_winning_history() -> List[WinningBidRecord]:
 async def trigger_scrape_and_analyze(send_telegram: bool = False) -> Dict[str, Any]:
     props, history = run_scraping_and_analysis_pipeline()
     save_pipeline_results(props, history)
-    attractive = [p for p in props if p.is_attractive]
+    all_synced = reverify_and_sync_all_stored_properties(enable_network=True)
+    attractive = [p for p in all_synced if p.is_attractive]
 
     tg_result: Optional[Dict[str, Any]] = None
     if send_telegram:
@@ -385,7 +387,7 @@ async def trigger_scrape_and_analyze(send_telegram: bool = False) -> Dict[str, A
 
     return {
         "ok": True,
-        "total_scraped": len(props),
+        "total_scraped": len(all_synced),
         "attractive_count": len(attractive),
         "history_count": len(history),
         "telegram": tg_result,
